@@ -1,0 +1,128 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [ "setuptools>=64", "setuptools-scm>=8" ]
+
+[project]
+name = "picture-thousand-records"
+description = "JPEG plus DuckDB warehouse prototype for real CellProfiler microscopy data."
+readme = "README.md"
+authors = [
+  { name = "CU DBMI" },
+]
+requires-python = ">=3.11,<3.14"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dynamic = [ "version" ]
+dependencies = [
+  "duckdb>=1.3",
+  "fire>=0.7",
+  "pillow>=10.4",
+]
+
+[project.scripts]
+picture-thousand-records = "picture_thousand_records.cli:trigger"
+
+[dependency-groups]
+dev = [
+  "coverage[toml]>=7.10.6",
+  "poethepoet>=0.34",
+  "pytest>=8.3.5",
+  "pytest-cov>=6.2.1",
+  "ruff>=0.12",
+]
+# transformers is pinned to the last 4.x release: CaicedoLab/MorphEm ships
+# its own custom `trust_remote_code=True` model class, and that code isn't
+# compatible with the 5.x loading pipeline internals.
+morphem = [
+  "hnswlib>=0.8.0",
+  "networkx>=3.2",
+  "pandas>=2.2",
+  "pyarrow>=14.0",
+  "safetensors>=0.8.0",
+  "torch>=2.14.0",
+  "torchvision>=0.29.0",
+  "transformers==4.57.6",
+  "umap-learn>=0.5.7",
+]
+notebooks = [
+  "cytodataframe @ git+https://github.com/cytomining/CytoDataFrame.git",
+  "ipykernel>=6.29",
+  "ipython>=8.26",
+  "jupyterlab>=4.4",
+  "nbclient>=0.10",
+  "nbformat>=5.10",
+  "pandas>=2.2",
+  "pillow-jxl-plugin>=1.3.8",
+]
+real_data = [
+  "cp-measure>=0.2",
+  "pillow-jxl-plugin>=1.3.8",
+  "pyarrow>=14.0",
+  "scikit-image>=0.25",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = [ "src" ]
+include = [ "picture_thousand_records*" ]
+
+[tool.setuptools.package-data]
+picture_thousand_records = [ "assets/*.png", "assets/*.jpg", "assets/*.parquet" ]
+
+[tool.setuptools_scm]
+root = "."
+fallback_version = "0.1.0"
+version_scheme = "no-guess-dev"
+local_scheme = "no-local-version"
+version_file = "src/picture_thousand_records/_version.py"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+fix = true
+lint.select = [
+  "A",
+  "ANN",
+  "C4",
+  "C90",
+  "E",
+  "F",
+  "I",
+  "PL",
+  "RUF",
+  "SIM",
+  "W",
+]
+lint.per-file-ignores."__init__.py" = [ "F401" ]
+lint.per-file-ignores."tests/*" = [ "PLR2004" ]
+lint.per-file-ignores."tools/*" = [ "PLR2004" ]
+
+[tool.pytest.ini_options]
+pythonpath = [ "." ]
+addopts = [
+  "--cov=picture_thousand_records",
+  "--cov-report=term-missing",
+  "--cov-report=xml",
+]
+
+[tool.coverage.run]
+branch = true
+source = [ "src/picture_thousand_records" ]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.poe.tasks]
+build = "picture-thousand-records build"
+test = "pytest"
+lint = "ruff check ."
+pipeline = "ruff check . && pytest"
+jupyter = "jupyter lab"

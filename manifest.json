@@ -1,0 +1,89 @@
+{
+  "format": "jpeg-warehouse",
+  "version": "0.2",
+  "title": "Real CellProfiler ExampleHuman Warehouse",
+  "database": "warehouse.duckdb",
+  "database_engine": "duckdb",
+  "access": {
+    "filesystem": "zipfs",
+    "member": "warehouse.duckdb",
+    "split": "!!"
+  },
+  "schemas": [
+    "cellprofiler",
+    "images",
+    "morphem"
+  ],
+  "rows": {
+    "cellprofiler.nuclei": 274,
+    "cellprofiler.cells": 274,
+    "cellprofiler.cytoplasm": 262,
+    "cellprofiler.ph3": 28,
+    "images.images": 1,
+    "images.object_crops": 822,
+    "morphem.features": 274,
+    "morphem.knn_graph": 1644
+  },
+  "source": {
+    "dataset": "CellProfiler ExampleHuman tutorial dataset (CC-0)",
+    "source_url": "https://github.com/cytomining/CytoTable/tree/main/tests/data/cellprofiler/ExampleHuman",
+    "measured_with": "cp_measure",
+    "pipeline": "tools/real_example_data/ExampleHuman.cppipe",
+    "crop_columns": [
+      "pixel_data_raw",
+      "pixel_data_jpegxl",
+      "pixel_data_jpeg"
+    ]
+  },
+  "morphem": {
+    "model": "CaicedoLab/MorphEm",
+    "model_url": "https://huggingface.co/CaicedoLab/MorphEm",
+    "embedding_dim": 1152,
+    "embedding_dim_per_channel": 384,
+    "channels": [
+      "DNA",
+      "PH3",
+      "cellbody"
+    ],
+    "projection": {
+      "method": "UMAP",
+      "library": "umap-learn",
+      "reference": "McInnes, Healy & Melville (2018)",
+      "metric": "euclidean",
+      "random_state": 42,
+      "columns": [
+        "umap_x",
+        "umap_y"
+      ]
+    },
+    "knn_graph": {
+      "method": "HNSW k-NN graph",
+      "library": "hnswlib",
+      "reference": "Malkov & Yashunin (2016)",
+      "k": 6,
+      "metric": "euclidean",
+      "edge_table": "morphem.knn_graph",
+      "layout": {
+        "method": "Fruchterman-Reingold force-directed layout",
+        "library": "networkx",
+        "random_state": 42,
+        "columns": [
+          "graph_x",
+          "graph_y"
+        ]
+      }
+    },
+    "mitotic_cluster_alignment": {
+      "phenotype": "PH3-positive (mitotic) cells",
+      "source_paper": "Moffat et al. 2006 (Cell)",
+      "note": "the ExampleHuman field's source screen used PH3 staining to score mitotic index; these unsupervised embeddings recover the same distinction",
+      "mitotic_cells": 20,
+      "total_cells": 274,
+      "mean_knn_neighbor_purity_pct": 86,
+      "population_baseline_pct": 7
+    }
+  },
+  "views": {
+    "cellprofiler.single_cell": "merged Cytoplasm/Cells/Nuclei single-cell profile, joined the same way as CytoTable's cellprofiler_csv preset (anchored on Cytoplasm, LEFT JOIN Cells/Nuclei via Parent_Cells/Parent_Nuclei)"
+  }
+}
