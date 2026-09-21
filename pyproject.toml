@@ -59,6 +59,7 @@ notebooks = [
   "pillow-jxl-plugin>=1.3.8",
 ]
 real_data = [
+  "cellpose>=4.0",
   "cp-measure>=0.2",
   "pillow-jxl-plugin>=1.3.8",
   "pyarrow>=14.0",
@@ -122,7 +123,17 @@ skip_covered = true
 
 [tool.poe.tasks]
 build = "picture-thousand-records build"
+serve = "python3 -m http.server 8000"
+validate = "picture-thousand-records validate database.jpg"
 test = "pytest"
 lint = "ruff check ."
-pipeline = "ruff check . && pytest"
 jupyter = "jupyter lab"
+
+[tool.poe.tasks.run]
+sequence = [ "build", "serve" ]
+
+[tool.poe.tasks.check]
+sequence = [ "lint", "test", "validate" ]
+
+[tool.poe.tasks.pipeline]
+sequence = [ "lint", "test" ]

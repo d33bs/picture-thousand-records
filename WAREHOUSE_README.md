@@ -31,12 +31,11 @@ DETACH warehouse;
 ## What is inside this file
 
 `database.jpg` is two files joined end to end. The first part is a JPEG
-picture of about 390 KB. The second part is a ZIP archive of about 7 MB. The
-archive holds three files:
+picture of about 390 KB. The second part is a ZIP archive of about 6 MB. The
+archive holds two files:
 
 - `warehouse.duckdb`: the database. DuckDB (a program that keeps tables in
   one file) reads it.
-- `manifest.json`: a list of the tables, their row counts, and the source.
 - `README.md`: this file.
 
 A JPEG ends with the two-byte marker `FF D9`, which means that the picture
@@ -45,28 +44,30 @@ table of contents at the end of the file, so a ZIP tool reads the end first.
 Each tool sees only its own part.
 
 Every table is real, measured from CellProfiler's public `ExampleHuman`
-tutorial field (CC-0, no personal identifiers) with `cp_measure`, following
-the same pipeline shape as `ExampleHuman.cppipe`. See `tools/real_example_data`.
+tutorial field (CC-0, no personal identifiers).
+[Cellpose](https://doi.org/10.1038/s41592-020-01018-x), using its current
+default [Cellpose-SAM](https://doi.org/10.1101/2025.04.28.651001) model,
+segments the cells from the cell-body channel. CellProfiler-style thresholding
+finds nuclei and PH3 foci. `cp_measure` computes the feature columns.
 
 ```text
 cellprofiler.nuclei    274 rows
-cellprofiler.cells     274 rows
-cellprofiler.cytoplasm 262 rows
+cellprofiler.cells     303 rows
+cellprofiler.cytoplasm 303 rows
 cellprofiler.ph3       28 rows
 images.images          1 row(s) of image metadata
-images.object_crops    822 rows, per-cell, per-channel
+images.object_crops    909 rows, per-cell, per-channel
                        image crops
-morphem.features       274 rows, one real
+morphem.features       303 rows, one real
                        1152-d MorphEm embedding per real cell
-morphem.knn_graph      1644 rows, a real k=6 HNSW
+morphem.knn_graph      1818 rows, a real k=6 HNSW
                        k-nearest-neighbor edge list over that embedding
 ```
 
 `cellprofiler.single_cell` is a view merging Cytoplasm/Cells/Nuclei into one
-row per cell -- the same join CytoTable's `cellprofiler_csv` preset uses for
-this exact dataset (anchored on Cytoplasm, LEFT JOIN Cells/Nuclei via
-Parent_Cells/Parent_Nuclei), with columns prefixed `Cytoplasm_`/`Cells_`/
-`Nuclei_` to match a real CytoTable single-cell table's naming:
+row per cell. It anchors on Cytoplasm, then LEFT JOINs Cells/Nuclei via
+Parent_Cells/Parent_Nuclei. Columns are prefixed
+`Cytoplasm_`/`Cells_`/`Nuclei_` to keep the CytoTable-style naming:
 
 ```sql
 SELECT Cells_AreaShape_Area, Nuclei_Intensity_MeanIntensity_DNA

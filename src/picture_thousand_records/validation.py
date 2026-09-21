@@ -21,7 +21,9 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 
     with zipfile.ZipFile(jpeg_path) as archive:
         members = archive.namelist()
-        manifest = json.loads(archive.read("manifest.json"))
+
+    manifest_path = jpeg_path.with_name("manifest.json")
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else None
 
     attached = connect_to_warehouse(jpeg_path)
     try:

@@ -1,12 +1,13 @@
 """Build the JPEG Warehouse polyglot artifact.
 
-Every table in this warehouse is real: real CellProfiler-equivalent
+Every table in this warehouse is real: real CellProfiler-style
 compartment tables (`cellprofiler.nuclei`/`cells`/`cytoplasm`/`ph3`), one-row
 image metadata (`images.images`), and real per-object image crops
 (`images.object_crops`), each crop a self-describing OME-Arrow-style record
 carrying the source field's own dimensions alongside its own pixel data, all
-measured and cropped from CellProfiler's public `ExampleHuman` tutorial
-field. See
+measured and cropped from CellProfiler's public `ExampleHuman` tutorial field.
+Cellpose, through its current default Cellpose-SAM model, supplies the
+cell-body masks used for cells and crops. See
 `tools/real_example_data/extract_features.py` for how those tables are
 produced; this module only loads the resulting bundled parquet assets into a
 fresh DuckDB database and wraps it in the JPEG/ZIP polyglot.
@@ -45,8 +46,8 @@ class ArtifactPaths:
 
 
 def build_artifacts(output_dir: str | Path = ".") -> ArtifactPaths:
-    """Build a JPEG/ZIP polyglot containing a DuckDB warehouse of real,
-    CellProfiler-equivalent CellProfiler `ExampleHuman` data."""
+    """Build a JPEG/ZIP polyglot containing a DuckDB warehouse of real
+    CellProfiler `ExampleHuman` data."""
 
     paths = _paths(Path(output_dir))
     paths.output_dir.mkdir(parents=True, exist_ok=True)
@@ -125,12 +126,12 @@ def _mitotic_cluster_alignment(
     """
 
     mitotic_cells = con.sql(
-        "SELECT COUNT(DISTINCT Parent_Nuclei) FROM cellprofiler.ph3"
+        "SELECT COUNT(DISTINCT Parent_Cells) FROM cellprofiler.ph3"
     ).fetchone()[0]
     purity = con.sql(
         """
         WITH mitotic AS (
-            SELECT DISTINCT Parent_Nuclei AS ObjectNumber FROM cellprofiler.ph3
+            SELECT DISTINCT Parent_Cells AS ObjectNumber FROM cellprofiler.ph3
         ),
         per_cell_purity AS (
             SELECT
@@ -288,6 +289,14 @@ def _manifest(counts: dict[str, int]) -> dict[str, Any]:
         "source": {
             "dataset": "CellProfiler ExampleHuman tutorial dataset (CC-0)",
             "source_url": SOURCE_URL,
+            "cell_segmentation": "Cellpose default model on the cell-body channel",
+            "cell_segmentation_reference": (
+                "Stringer et al. 2021; Pachitariu & Stringer 2022; "
+                "Pachitariu et al. 2025"
+            ),
+            "nuclei_and_ph3_segmentation": (
+                "CellProfiler-style thresholding and intensity watershed"
+            ),
             "measured_with": "cp_measure",
             "pipeline": "tools/real_example_data/ExampleHuman.cppipe",
             "crop_columns": ["pixel_data_raw", "pixel_data_jpegxl", "pixel_data_jpeg"],
@@ -337,8 +346,8 @@ def _manifest(counts: dict[str, int]) -> dict[str, Any]:
         "views": {
             "cellprofiler.single_cell": (
                 "merged Cytoplasm/Cells/Nuclei single-cell profile, joined "
-                "the same way as CytoTable's cellprofiler_csv preset "
-                "(anchored on Cytoplasm, LEFT JOIN Cells/Nuclei via "
+                "with the CytoTable-style parent-key pattern (anchored on "
+                "Cytoplasm, LEFT JOIN Cells/Nuclei via "
                 "Parent_Cells/Parent_Nuclei)"
             ),
         },
@@ -379,12 +388,11 @@ DETACH warehouse;
 ## What is inside this file
 
 `database.jpg` is two files joined end to end. The first part is a JPEG
-picture of about 390 KB. The second part is a ZIP archive of about 7 MB. The
-archive holds three files:
+picture of about 390 KB. The second part is a ZIP archive of about 6 MB. The
+archive holds two files:
 
 - `warehouse.duckdb`: the database. DuckDB (a program that keeps tables in
   one file) reads it.
-- `manifest.json`: a list of the tables, their row counts, and the source.
 - `README.md`: this file.
 
 A JPEG ends with the two-byte marker `FF D9`, which means that the picture
@@ -393,8 +401,11 @@ table of contents at the end of the file, so a ZIP tool reads the end first.
 Each tool sees only its own part.
 
 Every table is real, measured from CellProfiler's public `ExampleHuman`
-tutorial field (CC-0, no personal identifiers) with `cp_measure`, following
-the same pipeline shape as `ExampleHuman.cppipe`. See `tools/real_example_data`.
+tutorial field (CC-0, no personal identifiers).
+[Cellpose](https://doi.org/10.1038/s41592-020-01018-x), using its current
+default [Cellpose-SAM](https://doi.org/10.1101/2025.04.28.651001) model,
+segments the cells from the cell-body channel. CellProfiler-style thresholding
+finds nuclei and PH3 foci. `cp_measure` computes the feature columns.
 
 ```text
 cellprofiler.nuclei    {counts["nuclei"]} rows
@@ -411,10 +422,9 @@ morphem.knn_graph      {counts["morphem_knn_graph"]} rows, a real k=6 HNSW
 ```
 
 `cellprofiler.single_cell` is a view merging Cytoplasm/Cells/Nuclei into one
-row per cell -- the same join CytoTable's `cellprofiler_csv` preset uses for
-this exact dataset (anchored on Cytoplasm, LEFT JOIN Cells/Nuclei via
-Parent_Cells/Parent_Nuclei), with columns prefixed `Cytoplasm_`/`Cells_`/
-`Nuclei_` to match a real CytoTable single-cell table's naming:
+row per cell. It anchors on Cytoplasm, then LEFT JOINs Cells/Nuclei via
+Parent_Cells/Parent_Nuclei. Columns are prefixed
+`Cytoplasm_`/`Cells_`/`Nuclei_` to keep the CytoTable-style naming:
 
 ```sql
 SELECT Cells_AreaShape_Area, Nuclei_Intensity_MeanIntensity_DNA
@@ -721,7 +731,6 @@ def _append_zip(paths: ArtifactPaths) -> None:
         compression=zipfile.ZIP_STORED,
     ) as archive:
         archive.write(paths.duckdb, arcname="warehouse.duckdb")
-        archive.write(paths.manifest, arcname="manifest.json")
         archive.write(paths.readme, arcname="README.md")
 
 
@@ -781,9 +790,23 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
       padding: 18px;
       margin-bottom: 20px;
     }
-    .panel h2 {
+    h2 {
       margin: 0 0 8px;
       font-size: 18px;
+    }
+    .text-section {
+      margin: 30px 0;
+      padding-top: 22px;
+      border-top: 1px solid #2b3a47;
+    }
+    .text-section p:last-child {
+      margin-bottom: 0;
+    }
+    .text-section ul:not(.citations) {
+      margin: 0 0 16px;
+      padding-left: 20px;
+      color: var(--muted);
+      line-height: 1.5;
     }
     .plot-intro {
       font-size: 13px;
@@ -855,19 +878,6 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
       .cluster-grid {
         grid-template-columns: 1fr;
       }
-    }
-    .finding {
-      border-left: 3px solid var(--accent);
-    }
-    .finding h2 {
-      margin: 0 0 8px;
-      font-size: 18px;
-    }
-    .finding p {
-      margin: 0 0 10px;
-    }
-    .finding p:last-child {
-      margin-bottom: 0;
     }
     .citations {
       margin: 0;
@@ -1157,18 +1167,16 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
       <img id="tooltip-image" alt="">
       <span id="tooltip-label"></span>
     </div>
-    <div class="panel">
+    <section class="text-section">
       <h2>What is inside database.jpg</h2>
       <p>
         The file <code>database.jpg</code> is two files joined end to end.
         The first part is a JPEG picture. The second part is a ZIP archive.
-        The archive holds three files.
+        The archive holds two files.
       </p>
       <ul>
         <li><code>warehouse.duckdb</code>: the database. DuckDB (a program
           that keeps tables in one file) reads it.</li>
-        <li><code>manifest.json</code>: a list of the tables, their row
-          counts, and the source of the data.</li>
         <li><code>README.md</code>: the instructions for the database.</li>
       </ul>
       <h3>How can one file be both?</h3>
@@ -1190,13 +1198,8 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
         compression, so the database inside it is a byte-for-byte copy of
         <code>warehouse.duckdb</code>.
       </p>
-      <p>
-        CAUTION: Keep the original file. Some apps re-save a picture when
-        you send or upload it. A re-saved picture keeps only the photo and
-        loses the database.
-      </p>
-    </div>
-    <div class="panel">
+    </section>
+    <section class="text-section">
       <h2>Why this shape?</h2>
       <p>
         We drew inspiration from
@@ -1210,9 +1213,18 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
         opens first as an image, so anyone can see what the data is about
         before they run a query.
       </p>
-    </div>
-    <div class="panel">
+    </section>
+    <section class="text-section">
       <h2>How this all works</h2>
+      <p>
+        The cell crops start with
+        <a href="https://doi.org/10.1038/s41592-020-01018-x" target="_blank"
+           rel="noopener">Cellpose</a>, a general cell segmentation method.
+        Cellpose segments the cell-body channel. CellProfiler-style
+        thresholding finds nuclei and PH3 foci. Then
+        <a href="https://arxiv.org/abs/2507.01163" target="_blank"
+           rel="noopener">cp_measure</a> computes the feature tables.
+      </p>
       <p>
         Everything above uses the same real data. Each segmented cell has an
         embedding in <code>morphem.features.embedding</code>. The embedding
@@ -1238,8 +1250,8 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
            rel="noopener">networkx</a> draws the graph. The lines are real
         neighbor links, not a copy of the UMAP map.
       </p>
-    </div>
-    <div class="panel finding">
+    </section>
+    <section class="text-section">
       <h2>Does this match the source paper?</h2>
       <p>
         The clusters connect to the study that produced this data. Jason
@@ -1266,9 +1278,9 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
         This one field cannot recover the study's gene-by-gene results. But
         the cluster pattern gives a real, checkable link to the source data.
       </p>
-    </div>
-    <div class="panel">
-      <h2>Citations</h2>
+    </section>
+    <section class="text-section">
+      <h2>References</h2>
       <p>
         Here is where the data, the models, and the methods on this page
         came from.
@@ -1299,12 +1311,32 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
           7(10), R100.
         </li>
         <li>
+          Stringer, C., Wang, T., Michaelos, M., &amp; Pachitariu, M. (2021).
+          <a href="https://doi.org/10.1038/s41592-020-01018-x" target="_blank"
+             rel="noopener">Cellpose: a generalist algorithm for cellular
+          segmentation</a>. Nature Methods, 18, 100 to 106. Used to segment
+          cells from the cell-body channel.
+        </li>
+        <li>
+          Pachitariu, M., &amp; Stringer, C. (2022).
+          <a href="https://doi.org/10.1038/s41592-022-01663-4" target="_blank"
+             rel="noopener">Cellpose 2.0: how to train your own model</a>.
+          Nature Methods, 19, 1634 to 1641.
+        </li>
+        <li>
+          Pachitariu, M., Rariden, M., &amp; Stringer, C. (2025).
+          <a href="https://doi.org/10.1101/2025.04.28.651001" target="_blank"
+             rel="noopener">Cellpose-SAM: superhuman generalization for
+          cellular segmentation</a>. bioRxiv. Cited because the current
+          Cellpose package uses Cellpose-SAM as its default model.
+        </li>
+        <li>
           Munoz, A.F., Treis, T., Kalinin, A.A., Dasgupta, S., Theis, F.,
           Carpenter, A.E., &amp; Singh, S. (2025).
           <a href="https://arxiv.org/abs/2507.01163" target="_blank"
              rel="noopener">cp_measure: API-first feature extraction for
           image-based profiling workflows</a>. arXiv:2507.01163. Used to
-          measure the real CellProfiler-equivalent features in this
+          measure the real CellProfiler-style features in this
           database.
         </li>
         <li>
@@ -1362,7 +1394,7 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
           Science Conference (SciPy 2008), 11 to 15.
         </li>
       </ul>
-    </div>
+    </section>
   </main>
   <script type="module">
     import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.33.1-dev57.0/+esm";
@@ -1417,6 +1449,7 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
     let graphPoints = [];
     let graphEdges = [];
     let pointsByObjectNumber = new Map();
+    const DEFAULT_OBJECT_NUMBER = "269";
 
     const fetchJpegBytes = async () => {
       setStatus("Fetching database.jpg...");
@@ -1504,7 +1537,7 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
     };
 
     const loadClusterData = async () => {
-      // one real row per real cell, 274 total, cheap to load in full,
+      // one real row per real cell, cheap to load in full,
       // including its real cellbody JPEG for instant hover previews.
       const pointTable = await connection.query(`
         SELECT
@@ -1915,8 +1948,7 @@ SELECT 'images.object_crops', COUNT(*) FROM warehouse.images.object_crops;`,
         await loadClusterData();
         redrawClusters(null, []);
         setStatus("Ready.");
-        const startingObjectNumber = await pickRandomObjectNumber();
-        await runSearch(startingObjectNumber);
+        await runSearch(DEFAULT_OBJECT_NUMBER);
       } catch (error) {
         setStatus(`Failed to load database.jpg: ${error.message}`);
         // a page opened from disk (file://) cannot fetch() its neighbours;

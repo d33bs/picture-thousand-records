@@ -1,31 +1,27 @@
-"""Segment the real ExampleHuman field and extract real CellProfiler-style
-compartment tables with cp_measure.
+"""Segment the real ExampleHuman field and extract real compartment tables.
 
 This is a one-off data-preparation script, not part of the installed package.
-It follows the same pipeline shape as the real CellProfiler
+It starts from the same raw channels as the real CellProfiler
 `ExampleHuman.cppipe` (see SOURCE_README.md and that file, both in this
-directory), which is the pipeline CytoTable's `Cells.csv`/`Cytoplasm.csv`/
-`Nuclei.csv`/`PH3.csv` fixtures were generated from:
+directory). It keeps the CellProfiler-style table names and measurement
+columns, but uses Cellpose for the main cell-body segmentation:
 
     IdentifyPrimaryObjects(DNA)   -> Nuclei   (Minimum Cross-Entropy threshold,
                                                 intensity-based declumping)
     IdentifyPrimaryObjects(PH3)  -> PH3       (same, smaller objects)
     RelateObjects(Nuclei, PH3)   -> PH3.Parent_Nuclei
-    IdentifySecondaryObjects(Nuclei, cellbody, Propagation) -> Cells
-    IdentifyTertiaryObjects(Cells, Nuclei)    -> Cytoplasm
+    Cellpose(cellbody)            -> Cells
+    RelateObjects(Cells, PH3)     -> PH3.Parent_Cells
+    Cells minus Nuclei            -> Cytoplasm
     MeasureObjectIntensity(DNA, PH3) on Nuclei, Cells, Cytoplasm
     MeasureObjectSizeShape(+Zernike) on Nuclei, Cells, Cytoplasm
 
-We approximate the identify/relate modules with scikit-image (global
-Minimum-Cross-Entropy threshold via `threshold_li`, intensity-based watershed
-declumping/propagation) and replace the two Measure* modules with
-`cp_measure` -- a modern, pure-Python reimplementation of CellProfiler's
-measurement math -- restricted to the same feature set the real pipeline
-used, with matching `AreaShape_*`/`Intensity_*_<channel>`/`Location_*` column
-names and `ImageNumber`/`ObjectNumber`/`Parent_*` keys. The result is four
-compartment tables (nuclei, cells, cytoplasm, ph3) that should look like the
-real CytoTable CSVs, just derived from cp_measure instead of CellProfiler
-itself.
+The nuclei and PH3 objects still use scikit-image approximations of the
+CellProfiler identify modules. Cellpose gives the cell-body masks used for
+cell features and crops. `cp_measure`, a modern pure-Python implementation
+of CellProfiler measurement math, computes the same style of
+`AreaShape_*`/`Intensity_*_<channel>`/`Location_*` columns and the
+`ImageNumber`/`ObjectNumber`/`Parent_*` keys.
 
 Run with:
 
@@ -42,6 +38,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 import pillow_jxl  # noqa: F401  (registers the JXL codec with Pillow)
+from cellpose import models
 from cp_measure.bulk import get_core_measurements
 from PIL import Image
 from skimage.feature import peak_local_max
@@ -147,39 +144,41 @@ def _segment_primary(
     return _declump_by_intensity(channel, foreground, min_distance)
 
 
-def _segment_cells(cellbody: np.ndarray, nuclei: np.ndarray) -> np.ndarray:
-    """Approximate IdentifySecondaryObjects "Propagation" from Nuclei over
-    the cell-body channel: watershed on the intensity image itself (not a
-    distance transform) seeded by the nuclei labels.
+def _segment_cellpose_cells(cellbody: np.ndarray) -> np.ndarray:
+    """Segment cell bodies with the default Cellpose model.
+
+    Cellpose expects image-like intensity values, so this uses the raw uint8
+    cell-body channel rather than the [0, 1] normalized channel used by the
+    CellProfiler-style thresholding helpers.
     """
 
-    foreground = (cellbody > threshold_li(cellbody)) | (nuclei > 0)
-    return watershed(-cellbody, nuclei, mask=foreground)
+    model = models.CellposeModel(gpu=False)
+    return model.eval(cellbody, channel_axis=None, diameter=None, min_size=40)[0]
 
 
-def _relate_to_nearest_nucleus(
+def _relate_to_nearest_object(
     child_mask: np.ndarray,
-    nuclei_mask: np.ndarray,
+    parent_mask: np.ndarray,
 ) -> dict[int, int]:
-    """Approximate RelateObjects(parent=Nuclei): each child is related to
-    whichever nucleus it mostly overlaps, or the nearest nucleus centroid
+    """Approximate RelateObjects: each child is related to whichever parent
+    it mostly overlaps, or the nearest parent centroid
     if it does not overlap one at all.
     """
 
-    nuclei_centroids = {p.label: p.centroid for p in regionprops(nuclei_mask)}
+    parent_centroids = {p.label: p.centroid for p in regionprops(parent_mask)}
     parents = {}
     for prop in regionprops(child_mask):
         coords = prop.coords
-        overlap = nuclei_mask[coords[:, 0], coords[:, 1]]
+        overlap = parent_mask[coords[:, 0], coords[:, 1]]
         overlap = overlap[overlap > 0]
         if overlap.size:
             parents[prop.label] = int(np.bincount(overlap).argmax())
         else:
             cy, cx = prop.centroid
             parents[prop.label] = min(
-                nuclei_centroids,
-                key=lambda i: (nuclei_centroids[i][0] - cy) ** 2
-                + (nuclei_centroids[i][1] - cx) ** 2,
+                parent_centroids,
+                key=lambda i: (parent_centroids[i][0] - cy) ** 2
+                + (parent_centroids[i][1] - cx) ** 2,
             )
     return parents
 
@@ -315,14 +314,14 @@ def _image_metadata() -> pd.DataFrame:
 def main() -> None:
     dna = _load_channel("d0")
     ph3 = _load_channel("d1")
-    cellbody = _load_channel("d2")
+    cellbody = _load_channel_uint8("d2")
     channels = {"DNA": dna, "PH3": ph3}
 
     nuclei = _segment_primary(dna, NUCLEI_MIN_AREA, MIN_PEAK_DISTANCE)
     ph3_objects = _segment_primary(
         ph3, PH3_MIN_AREA, min_distance=4, threshold_func=threshold_otsu
     )
-    cells = _segment_cells(cellbody, nuclei)
+    cells = _segment_cellpose_cells(cellbody)
     cytoplasm = np.where(nuclei > 0, 0, cells)
 
     print(
@@ -333,11 +332,13 @@ def main() -> None:
     nuclei_df = _measure_compartment(nuclei, channels)
     cells_df = _measure_compartment(cells, channels)
     cytoplasm_df = _measure_compartment(cytoplasm, channels)
-    cells_df["Parent_Nuclei"] = cells_df["ObjectNumber"]
-    cytoplasm_df["Parent_Nuclei"] = cytoplasm_df["ObjectNumber"]
+    cell_parents = _relate_to_nearest_object(cells, nuclei)
+    cells_df["Parent_Nuclei"] = cells_df["ObjectNumber"].map(cell_parents)
+    cytoplasm_df["Parent_Nuclei"] = cytoplasm_df["ObjectNumber"].map(cell_parents)
     cytoplasm_df["Parent_Cells"] = cytoplasm_df["ObjectNumber"]
 
-    ph3_parents = _relate_to_nearest_nucleus(ph3_objects, nuclei)
+    ph3_nuclei_parents = _relate_to_nearest_object(ph3_objects, nuclei)
+    ph3_cell_parents = _relate_to_nearest_object(ph3_objects, cells)
     ph3_numbers = _object_numbers(ph3_objects)
     ph3_props = {p.label: p.centroid for p in regionprops(ph3_objects)}
     ph3_df = pd.DataFrame(
@@ -347,7 +348,8 @@ def main() -> None:
             "Location_Center_X": [ph3_props[n][1] for n in ph3_numbers],
             "Location_Center_Y": [ph3_props[n][0] for n in ph3_numbers],
             "Location_Center_Z": 0.0,
-            "Parent_Nuclei": [ph3_parents[n] for n in ph3_numbers],
+            "Parent_Nuclei": [ph3_nuclei_parents[n] for n in ph3_numbers],
+            "Parent_Cells": [ph3_cell_parents[n] for n in ph3_numbers],
         }
     )
 

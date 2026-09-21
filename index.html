@@ -52,9 +52,23 @@
       padding: 18px;
       margin-bottom: 20px;
     }
-    .panel h2 {
+    h2 {
       margin: 0 0 8px;
       font-size: 18px;
+    }
+    .text-section {
+      margin: 30px 0;
+      padding-top: 22px;
+      border-top: 1px solid #2b3a47;
+    }
+    .text-section p:last-child {
+      margin-bottom: 0;
+    }
+    .text-section ul:not(.citations) {
+      margin: 0 0 16px;
+      padding-left: 20px;
+      color: var(--muted);
+      line-height: 1.5;
     }
     .plot-intro {
       font-size: 13px;
@@ -126,19 +140,6 @@
       .cluster-grid {
         grid-template-columns: 1fr;
       }
-    }
-    .finding {
-      border-left: 3px solid var(--accent);
-    }
-    .finding h2 {
-      margin: 0 0 8px;
-      font-size: 18px;
-    }
-    .finding p {
-      margin: 0 0 10px;
-    }
-    .finding p:last-child {
-      margin-bottom: 0;
     }
     .citations {
       margin: 0;
@@ -325,10 +326,10 @@
     </p>
     <img class="cover" src="database.jpg" alt="Database JPEG cover image">
     <div class="panel">
-      <h2>Run your own SQL on the database</h2>
+      <h2>Run your own SQL</h2>
       <p>
-        Start with a question. This input box runs real SQL against the database.
-        Pick an example query, or feel free to write your own.
+        Start with a question. This box runs real SQL against the database.
+        Pick an example query, or write your own.
       </p>
       <div class="examples" id="sql-examples"></div>
       <textarea id="sql-editor" spellcheck="false"></textarea>
@@ -428,18 +429,16 @@
       <img id="tooltip-image" alt="">
       <span id="tooltip-label"></span>
     </div>
-    <div class="panel">
+    <section class="text-section">
       <h2>What is inside database.jpg</h2>
       <p>
         The file <code>database.jpg</code> is two files joined end to end.
         The first part is a JPEG picture. The second part is a ZIP archive.
-        The archive holds three files.
+        The archive holds two files.
       </p>
       <ul>
         <li><code>warehouse.duckdb</code>: the database. DuckDB (a program
           that keeps tables in one file) reads it.</li>
-        <li><code>manifest.json</code>: a list of the tables, their row
-          counts, and the source of the data.</li>
         <li><code>README.md</code>: the instructions for the database.</li>
       </ul>
       <h3>How can one file be both?</h3>
@@ -466,8 +465,8 @@
         you send or upload it. A re-saved picture keeps only the photo and
         loses the database.
       </p>
-    </div>
-    <div class="panel">
+    </section>
+    <section class="text-section">
       <h2>Why this shape?</h2>
       <p>
         We drew inspiration from
@@ -481,9 +480,18 @@
         opens first as an image, so anyone can see what the data is about
         before they run a query.
       </p>
-    </div>
-    <div class="panel">
+    </section>
+    <section class="text-section">
       <h2>How this all works</h2>
+      <p>
+        The cell crops start with
+        <a href="https://doi.org/10.1038/s41592-020-01018-x" target="_blank"
+           rel="noopener">Cellpose</a>, a general cell segmentation method.
+        Cellpose segments the cell-body channel. CellProfiler-style
+        thresholding finds nuclei and PH3 foci. Then
+        <a href="https://arxiv.org/abs/2507.01163" target="_blank"
+           rel="noopener">cp_measure</a> computes the feature tables.
+      </p>
       <p>
         Everything above uses the same real data. Each segmented cell has an
         embedding in <code>morphem.features.embedding</code>. The embedding
@@ -509,8 +517,8 @@
            rel="noopener">networkx</a> draws the graph. The lines are real
         neighbor links, not a copy of the UMAP map.
       </p>
-    </div>
-    <div class="panel finding">
+    </section>
+    <section class="text-section">
       <h2>Does this match the source paper?</h2>
       <p>
         The clusters connect to the study that produced this data. Jason
@@ -522,10 +530,11 @@
       </p>
       <p>
         This warehouse finds
-        <strong>20 real PH3-positive (mitotic) cells</strong>
-        out of <strong>274</strong> in this one field. No one told the model
-        which cells were mitotic. Still, those cells cluster together. On average,
-        <strong>86%</strong> of a PH3-positive cell's nearest
+        <strong>21 real PH3-positive (mitotic) cells</strong>
+        out of <strong>303</strong> in this one field. No one
+        told the model which cells were mitotic. Still, those cells cluster
+        together. On average,
+        <strong>91%</strong> of a PH3-positive cell's nearest
         neighbors, found by the HNSW index, are also PH3-positive. Random
         scattering of mitotic cells predicts only
         <strong>7%</strong>.
@@ -536,9 +545,9 @@
         This one field cannot recover the study's gene-by-gene results. But
         the cluster pattern gives a real, checkable link to the source data.
       </p>
-    </div>
-    <div class="panel">
-      <h2>Citations</h2>
+    </section>
+    <section class="text-section">
+      <h2>References</h2>
       <p>
         Here is where the data, the models, and the methods on this page
         came from.
@@ -569,12 +578,32 @@
           7(10), R100.
         </li>
         <li>
+          Stringer, C., Wang, T., Michaelos, M., &amp; Pachitariu, M. (2021).
+          <a href="https://doi.org/10.1038/s41592-020-01018-x" target="_blank"
+             rel="noopener">Cellpose: a generalist algorithm for cellular
+          segmentation</a>. Nature Methods, 18, 100 to 106. Used to segment
+          cells from the cell-body channel.
+        </li>
+        <li>
+          Pachitariu, M., &amp; Stringer, C. (2022).
+          <a href="https://doi.org/10.1038/s41592-022-01663-4" target="_blank"
+             rel="noopener">Cellpose 2.0: how to train your own model</a>.
+          Nature Methods, 19, 1634 to 1641.
+        </li>
+        <li>
+          Pachitariu, M., Rariden, M., &amp; Stringer, C. (2025).
+          <a href="https://doi.org/10.1101/2025.04.28.651001" target="_blank"
+             rel="noopener">Cellpose-SAM: superhuman generalization for
+          cellular segmentation</a>. bioRxiv. Cited because the current
+          Cellpose package uses Cellpose-SAM as its default model.
+        </li>
+        <li>
           Munoz, A.F., Treis, T., Kalinin, A.A., Dasgupta, S., Theis, F.,
           Carpenter, A.E., &amp; Singh, S. (2025).
           <a href="https://arxiv.org/abs/2507.01163" target="_blank"
              rel="noopener">cp_measure: API-first feature extraction for
           image-based profiling workflows</a>. arXiv:2507.01163. Used to
-          measure the real CellProfiler-equivalent features in this
+          measure the real CellProfiler-style features in this
           database.
         </li>
         <li>
@@ -632,7 +661,7 @@
           Science Conference (SciPy 2008), 11 to 15.
         </li>
       </ul>
-    </div>
+    </section>
   </main>
   <script type="module">
     import * as duckdb from "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.33.1-dev57.0/+esm";
@@ -687,6 +716,7 @@
     let graphPoints = [];
     let graphEdges = [];
     let pointsByObjectNumber = new Map();
+    const DEFAULT_OBJECT_NUMBER = "269";
 
     const fetchJpegBytes = async () => {
       setStatus("Fetching database.jpg...");
@@ -774,7 +804,7 @@
     };
 
     const loadClusterData = async () => {
-      // one real row per real cell, 274 total, cheap to load in full,
+      // one real row per real cell, cheap to load in full,
       // including its real cellbody JPEG for instant hover previews.
       const pointTable = await connection.query(`
         SELECT
@@ -1185,8 +1215,7 @@ SELECT 'images.object_crops', COUNT(*) FROM warehouse.images.object_crops;`,
         await loadClusterData();
         redrawClusters(null, []);
         setStatus("Ready.");
-        const startingObjectNumber = await pickRandomObjectNumber();
-        await runSearch(startingObjectNumber);
+        await runSearch(DEFAULT_OBJECT_NUMBER);
       } catch (error) {
         setStatus(`Failed to load database.jpg: ${error.message}`);
         // a page opened from disk (file://) cannot fetch() its neighbours;

@@ -24,7 +24,6 @@ def test_build_artifact_contains_jpeg_zip_and_duckdb(tmp_path: Path) -> None:
     with zipfile.ZipFile(paths.jpeg) as archive:
         assert set(archive.namelist()) == {
             "warehouse.duckdb",
-            "manifest.json",
             "README.md",
         }
 
@@ -32,13 +31,13 @@ def test_build_artifact_contains_jpeg_zip_and_duckdb(tmp_path: Path) -> None:
     counts = report["counts"]
     # this is a fixed, real, segmented microscopy field, so counts are exact
     assert counts["cellprofiler_nuclei"] == 274
-    assert counts["cellprofiler_cells"] == 274
-    assert counts["cellprofiler_cytoplasm"] == 262
+    assert counts["cellprofiler_cells"] == 303
+    assert counts["cellprofiler_cytoplasm"] == 303
     assert counts["cellprofiler_ph3"] == 28
     assert counts["images_metadata"] == 1
-    assert counts["images_object_crops"] == 822
-    assert counts["morphem_features"] == 274
-    assert counts["morphem_knn_graph"] == 274 * 6
+    assert counts["images_object_crops"] == 303 * 3
+    assert counts["morphem_features"] == 303
+    assert counts["morphem_knn_graph"] == 303 * 6
     assert report["duckdb_access"] in {"zipfs", "extracted"}
     assert report["manifest"]["schemas"] == ["cellprofiler", "images", "morphem"]
     alignment = report["manifest"]["morphem"]["mitotic_cluster_alignment"]
@@ -68,7 +67,15 @@ def test_real_tables_hold_real_cellprofiler_features(tmp_path: Path) -> None:
             """
             SELECT COUNT(*)
             FROM warehouse.cellprofiler.cytoplasm
-            WHERE Parent_Nuclei != Parent_Cells
+            WHERE Parent_Cells != ObjectNumber
+            """
+        ).fetchone()[0]
+        valid_cell_parents = con.sql(
+            """
+            SELECT COUNT(*)
+            FROM warehouse.cellprofiler.cells c
+            JOIN warehouse.cellprofiler.nuclei n
+                ON n.ObjectNumber = c.Parent_Nuclei
             """
         ).fetchone()[0]
         valid_nuclei_parents = con.sql(
@@ -79,6 +86,14 @@ def test_real_tables_hold_real_cellprofiler_features(tmp_path: Path) -> None:
                 ON n.ObjectNumber = p.Parent_Nuclei
             """
         ).fetchone()[0]
+        valid_cell_ph3_parents = con.sql(
+            """
+            SELECT COUNT(*)
+            FROM warehouse.cellprofiler.ph3 p
+            JOIN warehouse.cellprofiler.cells c
+                ON c.ObjectNumber = p.Parent_Cells
+            """
+        ).fetchone()[0]
         ph3_count = con.sql(
             "SELECT COUNT(*) FROM warehouse.cellprofiler.ph3"
         ).fetchone()[0]
@@ -87,9 +102,11 @@ def test_real_tables_hold_real_cellprofiler_features(tmp_path: Path) -> None:
 
     assert len(cells) == 5
     assert all(area > 0 for _, area, _ in cells)
-    assert all(object_number == parent for object_number, _, parent in cells)
+    assert all(parent > 0 for _, _, parent in cells)
     assert mismatched_cytoplasm_parents == 0
+    assert valid_cell_parents == 303
     assert valid_nuclei_parents == ph3_count
+    assert valid_cell_ph3_parents == ph3_count
 
 
 def test_single_cell_view_matches_cytotable_preset_join(tmp_path: Path) -> None:
@@ -115,12 +132,13 @@ def test_single_cell_view_matches_cytotable_preset_join(tmp_path: Path) -> None:
     finally:
         attached.connection.close()
 
-    # CytoTable's cellprofiler_csv preset anchors this join on Cytoplasm and
-    # LEFT JOINs Cells/Nuclei via Parent_Cells/Parent_Nuclei, so the view has
-    # exactly one row per real cytoplasm object
+    # The single-cell view anchors this join on Cytoplasm and LEFT JOINs
+    # Cells/Nuclei via Parent_Cells/Parent_Nuclei, so the view has exactly
+    # one row per real cytoplasm object.
     assert row_count == cytoplasm_count
     cytoplasm_id, cells_id, nuclei_id, cytoplasm_area, cells_area, nuclei_area = row
-    assert cytoplasm_id == cells_id == nuclei_id
+    assert cytoplasm_id == cells_id
+    assert nuclei_id > 0
     assert cytoplasm_area > 0
     assert cells_area > 0
     assert nuclei_area > 0
@@ -214,14 +232,14 @@ def test_knn_graph_holds_real_hnsw_neighbors(tmp_path: Path) -> None:
     finally:
         attached.connection.close()
 
-    assert distinct_sources == 274
+    assert distinct_sources == 303
     assert self_loops == 0
     assert edges_for_cell_1 == 6
     # a real HNSW index's approximate distance should closely match the
     # exact brute-force distance array_distance computes for the same pair
     assert abs(hnsw_distance - exact_distance) < 0.05
     # a real force-directed layout of the graph, not a constant placeholder
-    assert distinct_graph_x == 274
+    assert distinct_graph_x == 303
 
 
 def test_object_crops_are_self_describing_ome_arrow_records(tmp_path: Path) -> None:
@@ -290,6 +308,9 @@ def test_browser_page_contains_wasm_adapter(tmp_path: Path) -> None:
     assert "Why this shape?" in html
     assert "https://doi.org/10.1145/3749163" in html
     assert "https://arxiv.org/abs/2608.07632" in html
+    assert "https://doi.org/10.1038/s41592-020-01018-x" in html
+    assert "https://doi.org/10.1038/s41592-022-01663-4" in html
+    assert "https://doi.org/10.1101/2025.04.28.651001" in html
     assert 'zip.file("warehouse.duckdb")' in html
     assert 'registerFileBuffer("warehouse.duckdb"' in html
     assert "ATTACH 'warehouse.duckdb' AS warehouse (READ_ONLY)" in html
@@ -321,6 +342,8 @@ def test_browser_page_contains_wasm_adapter(tmp_path: Path) -> None:
     assert "HNSW" in html
     assert 'id="hover-tooltip"' in html
     assert "attachClusterInteraction" in html
+    assert 'const DEFAULT_OBJECT_NUMBER = "269";' in html
+    assert "await runSearch(DEFAULT_OBJECT_NUMBER);" in html
     # figure captions (title via <h2>, canvas, then caption+legend below)
     assert "<figure" in html
     assert html.index("<h2>UMAP") < html.index('id="umap-canvas"')
@@ -359,4 +382,4 @@ def test_documented_sql_recipe_runs_as_printed(tmp_path: Path) -> None:
     except duckdb.IOException as error:  # zipfs must be downloadable
         pytest.skip(f"zipfs unavailable: {error}")
     count = con.sql("SELECT count(*) FROM warehouse.cellprofiler.cells").fetchone()
-    assert count == (274,)
+    assert count == (303,)

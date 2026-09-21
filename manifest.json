@@ -16,17 +16,20 @@
   ],
   "rows": {
     "cellprofiler.nuclei": 274,
-    "cellprofiler.cells": 274,
-    "cellprofiler.cytoplasm": 262,
+    "cellprofiler.cells": 303,
+    "cellprofiler.cytoplasm": 303,
     "cellprofiler.ph3": 28,
     "images.images": 1,
-    "images.object_crops": 822,
-    "morphem.features": 274,
-    "morphem.knn_graph": 1644
+    "images.object_crops": 909,
+    "morphem.features": 303,
+    "morphem.knn_graph": 1818
   },
   "source": {
     "dataset": "CellProfiler ExampleHuman tutorial dataset (CC-0)",
     "source_url": "https://github.com/cytomining/CytoTable/tree/main/tests/data/cellprofiler/ExampleHuman",
+    "cell_segmentation": "Cellpose default model on the cell-body channel",
+    "cell_segmentation_reference": "Stringer et al. 2021; Pachitariu & Stringer 2022; Pachitariu et al. 2025",
+    "nuclei_and_ph3_segmentation": "CellProfiler-style thresholding and intensity watershed",
     "measured_with": "cp_measure",
     "pipeline": "tools/real_example_data/ExampleHuman.cppipe",
     "crop_columns": [
@@ -77,13 +80,13 @@
       "phenotype": "PH3-positive (mitotic) cells",
       "source_paper": "Moffat et al. 2006 (Cell)",
       "note": "the ExampleHuman field's source screen used PH3 staining to score mitotic index; these unsupervised embeddings recover the same distinction",
-      "mitotic_cells": 20,
-      "total_cells": 274,
-      "mean_knn_neighbor_purity_pct": 86,
+      "mitotic_cells": 21,
+      "total_cells": 303,
+      "mean_knn_neighbor_purity_pct": 91,
       "population_baseline_pct": 7
     }
   },
   "views": {
-    "cellprofiler.single_cell": "merged Cytoplasm/Cells/Nuclei single-cell profile, joined the same way as CytoTable's cellprofiler_csv preset (anchored on Cytoplasm, LEFT JOIN Cells/Nuclei via Parent_Cells/Parent_Nuclei)"
+    "cellprofiler.single_cell": "merged Cytoplasm/Cells/Nuclei single-cell profile, joined with the CytoTable-style parent-key pattern (anchored on Cytoplasm, LEFT JOIN Cells/Nuclei via Parent_Cells/Parent_Nuclei)"
   }
 }

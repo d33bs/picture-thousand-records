@@ -11,21 +11,18 @@ package code lives under `src/`, tests live under `tests/`, the CLI is exposed a
 ## What is inside `database.jpg`
 
 The file `database.jpg` is two files joined end to end. The first part is a
-JPEG picture of about 390 KB. The second part is a ZIP archive of about 7 MB.
-The archive holds three files:
+JPEG picture of about 390 KB. The second part is a ZIP archive of about 6 MB.
+The archive holds two files:
 
 - `warehouse.duckdb`: the database. DuckDB (a program that keeps tables in one
   file) reads it.
-- `manifest.json`: a list of the tables, their row counts, and the source of
-  the data.
 - `README.md`: the instructions for the database.
 
 ```text
 database.jpg
   first bytes   JPEG picture       starts with FF D8, ends with FF D9
   next bytes    ZIP archive        stored without compression
-                  warehouse.duckdb   the database (about 7 MB)
-                  manifest.json      about 3 KB
+                  warehouse.duckdb   the database (about 6 MB)
                   README.md          about 4 KB
                   table of contents  the last bytes of the file
 ```
@@ -68,11 +65,11 @@ test fixtures:
 
 ```text
 cellprofiler.nuclei    real per-nucleus AreaShape/Intensity/Location features
-cellprofiler.cells     same, per-cell (Parent_Nuclei -> nuclei)
-cellprofiler.cytoplasm same, per-cytoplasm (Parent_Nuclei, Parent_Cells)
-cellprofiler.ph3       real mitotic (PH3-positive) foci (Parent_Nuclei)
+cellprofiler.cells     Cellpose-segmented cells (Parent_Nuclei -> nuclei)
+cellprofiler.cytoplasm per-cell cytoplasm (Parent_Nuclei, Parent_Cells)
+cellprofiler.ph3       real mitotic foci (Parent_Nuclei, Parent_Cells)
 images.images          metadata for the source microscopy field
-images.object_crops    real per-cell, per-channel crops of that field
+images.object_crops    real Cellpose-cell, per-channel crops of that field
 morphem.features       one real 1152-d MorphEm embedding per real cell
 morphem.knn_graph      a real k=6 HNSW nearest-neighbor edge list over
                        that embedding
@@ -88,12 +85,12 @@ OME-Arrow-style representation DuckDB can query with no decoding),
 for universal compatibility).
 
 `cellprofiler.single_cell` is a view merging Cytoplasm/Cells/Nuclei into one
-row per cell, using the same join CytoTable's `cellprofiler_csv`
-[preset](https://github.com/cytomining/CytoTable/blob/main/cytotable/presets.py)
-uses for this exact dataset (anchored on Cytoplasm, `LEFT JOIN` Cells/Nuclei
-via `Parent_Cells`/`Parent_Nuclei`), with columns prefixed
-`Cytoplasm_`/`Cells_`/`Nuclei_` to match what a real CytoTable single-cell
-table looks like.
+row per cell. It uses the same parent-key pattern as CytoTable's
+`cellprofiler_csv`
+[preset](https://github.com/cytomining/CytoTable/blob/main/cytotable/presets.py):
+anchor on Cytoplasm, then `LEFT JOIN` Cells/Nuclei via
+`Parent_Cells`/`Parent_Nuclei`. Columns are prefixed
+`Cytoplasm_`/`Cells_`/`Nuclei_` to keep the CytoTable-style naming.
 
 `morphem.features.embedding` is a fixed-size `FLOAT[1152]` array: the real,
 pretrained [CaicedoLab/MorphEm](https://huggingface.co/CaicedoLab/MorphEm)
@@ -124,10 +121,11 @@ That agreement is checkable against the dataset's own origin. This field's
 images were provided by Jason Moffat, a co-author of the screen that first
 used this data — a genome-scale RNAi screen (Moffat et al. 2006, *Cell*)
 that scored "mitotic index" via PH3 staining. Computed fresh at every build
-from the real tables (see `_mitotic_cluster_alignment` in `builder.py`), the
-real, CellProfiler-equivalent segmentation finds 20 real PH3-positive
-(mitotic) cells out of 274 in this field; with no supervision, on average
-86% of a PH3-positive cell's real HNSW nearest neighbors are also
+from the real tables (see `_mitotic_cluster_alignment` in `builder.py`),
+[Cellpose](https://doi.org/10.1038/s41592-020-01018-x) cell segmentation
+finds 21 real PH3-positive
+(mitotic) cells out of 303 in this field; with no supervision, on average
+91% of a PH3-positive cell's real HNSW nearest neighbors are also
 PH3-positive, versus the ~7% expected by chance. A general-purpose model
 never trained on this screen still recovers the same mitotic/interphase
 distinction the original screen was built to measure, purely from image
@@ -160,10 +158,12 @@ so building the warehouse itself never needs torch, transformers,
 umap-learn, or hnswlib either.
 
 `tools/real_example_data/extract_features.py` regenerates the six
-`cellprofiler`/`images` tables from the raw TIFF channels: it approximates
-CellProfiler's `ExampleHuman.cppipe` identify/relate modules with
-scikit-image (global threshold + intensity-based watershed
-declumping/propagation), measures the resulting objects with
+`cellprofiler`/`images` tables from the raw TIFF channels: it segments cells
+with [Cellpose](https://doi.org/10.1038/s41592-020-01018-x), using its
+current default
+[Cellpose-SAM](https://doi.org/10.1101/2025.04.28.651001) model, on the
+cell-body channel. It keeps CellProfiler-style thresholding for nuclei and
+PH3 foci, and measures the resulting objects with
 [`cp_measure`](https://github.com/afermg/cp_measure) — a modern, pure-Python
 reimplementation of CellProfiler's measurement math (no Java, wxPython, or
 javabridge/legacy-NumPy pin required) — and crops each real cell out of each
@@ -177,7 +177,19 @@ uv run --group real_data python3 tools/real_example_data/extract_features.py
 That writes six parquet files to `tools/real_example_data/output/`, which
 are what's bundled as `src/picture_thousand_records/assets/real_*.parquet`
 and loaded directly into DuckDB at build time — so building the warehouse
-itself never needs scikit-image, cp_measure, or a JPEG XL codec.
+itself never needs Cellpose, scikit-image, cp_measure, or a JPEG XL codec.
+
+Cellpose references:
+
+- Stringer, C., Wang, T., Michaelos, M., & Pachitariu, M. (2021).
+  [Cellpose: a generalist algorithm for cellular segmentation](https://doi.org/10.1038/s41592-020-01018-x).
+  Nature Methods, 18, 100 to 106.
+- Pachitariu, M., & Stringer, C. (2022).
+  [Cellpose 2.0: how to train your own model](https://doi.org/10.1038/s41592-022-01663-4).
+  Nature Methods, 19, 1634 to 1641.
+- Pachitariu, M., Rariden, M., & Stringer, C. (2025).
+  [Cellpose-SAM: superhuman generalization for cellular segmentation](https://doi.org/10.1101/2025.04.28.651001).
+  bioRxiv.
 
 ## Build
 
@@ -189,11 +201,25 @@ This writes:
 
 - `database.jpg`: the JPEG/ZIP polyglot artifact.
 - `warehouse.duckdb`: the build-time database copied into the JPEG.
-- `manifest.json`: descriptive metadata copied into the JPEG.
+- `manifest.json`: descriptive metadata written beside the JPEG.
 - `index.html`: a local browser page that renders `database.jpg`.
 
 The build is deterministic — it just loads the six bundled parquet assets
 into a fresh DuckDB database, so there is no dataset scale or seed to pass.
+
+## Dev tasks
+
+This project uses
+[Poe the Poet](https://poethepoet.natn.io/) for common development commands.
+Run tasks through `uv` so they use the project environment:
+
+```sh
+uv run poe run       # build the files, then serve this folder on port 8000
+uv run poe build     # rebuild database.jpg, warehouse.duckdb, and index.html
+uv run poe validate  # validate database.jpg
+uv run poe test      # run tests
+uv run poe check     # run lint, tests, and validation
+```
 
 ## Validate
 
@@ -287,13 +313,14 @@ real nearest neighbors below.
 - V1: `index.html` provides a browser DuckDB-Wasm adapter for the same JPEG file.
 - V2: the visible JPEG explains the dataset, schema, and DuckDB access path.
 - V3: `notebooks/cytodataframe_demo.ipynb` runs and displays real image data.
-- V4: `cellprofiler.nuclei`/`cells`/`cytoplasm`/`ph3` hold real, `cp_measure`-computed
-  CellProfiler-equivalent compartment tables from a real, CC-0 microscopy field,
-  matching CytoTable's real `Nuclei.csv`/`Cells.csv`/`Cytoplasm.csv`/`PH3.csv` shape.
+- V4: `cellprofiler.nuclei`/`cells`/`cytoplasm`/`ph3` hold real,
+  `cp_measure`-computed compartment tables from a real, CC-0 microscopy
+  field. Cellpose supplies the cell masks. CellProfiler-style thresholding
+  supplies nuclei and PH3 foci.
 - V5: `images.object_crops` holds real per-object image crops as
-  self-describing OME-Arrow-style records, cropped straight from the source
-  TIFF channels and stored three ways: raw uncompressed array, JPEG XL, and
-  plain JPEG.
+  self-describing OME-Arrow-style records, cropped around the Cellpose cells
+  from the source TIFF channels and stored three ways: raw uncompressed array,
+  JPEG XL, and plain JPEG.
 - V6: `cellprofiler.single_cell` merges Cytoplasm/Cells/Nuclei into one
   single-cell profile per real cell, using CytoTable's own preset join.
 - V7: `morphem.features` holds one real, fixed-size deep-learning embedding
