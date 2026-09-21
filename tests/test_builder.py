@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import re
+import shutil
 import zipfile
 from pathlib import Path
 
+import duckdb
+import pytest
 from PIL import Image
 
 from picture_thousand_records import build_artifacts
@@ -281,6 +285,11 @@ def test_browser_page_contains_wasm_adapter(tmp_path: Path) -> None:
     assert "@duckdb/duckdb-wasm" in html
     assert "JSZip.loadAsync" in html
     assert 'id="picker-input"' in html
+    assert "What is inside database.jpg" in html
+    assert "FF D9" in html
+    assert "Why this shape?" in html
+    assert "https://doi.org/10.1145/3749163" in html
+    assert "https://arxiv.org/abs/2608.07632" in html
     assert 'zip.file("warehouse.duckdb")' in html
     assert 'registerFileBuffer("warehouse.duckdb"' in html
     assert "ATTACH 'warehouse.duckdb' AS warehouse (READ_ONLY)" in html
@@ -296,8 +305,11 @@ def test_browser_page_contains_wasm_adapter(tmp_path: Path) -> None:
     assert "warehouse.morphem.knn_graph" in html
     assert "array_distance(" in html
     assert "connection.query(sql)" in html
+    assert "sqlResultsEl.innerHTML" not in html
+    assert 'document.createElement("td")' in html
     # the interactive similarity search and plots, on the same page
     assert 'id="object-number"' in html
+    assert "normalizeObjectNumber" in html
     assert 'id="search"' in html
     assert 'id="umap-canvas"' in html
     assert 'id="graph-canvas"' in html
@@ -321,12 +333,6 @@ def test_browser_page_contains_wasm_adapter(tmp_path: Path) -> None:
 
 def test_documented_sql_recipe_runs_as_printed(tmp_path: Path) -> None:
     """The SQL in the embedded README is what users copy; run it verbatim."""
-    import re
-    import shutil
-
-    import duckdb
-    import pytest
-
     paths = build_artifacts(tmp_path)
     readme = paths.readme.read_text(encoding="utf-8")
     blocks = re.findall(r"```sql\n(.*?)```", readme, flags=re.S)
@@ -346,8 +352,9 @@ def test_documented_sql_recipe_runs_as_printed(tmp_path: Path) -> None:
     try:
         for statement in statements:
             con.execute(
-                statement.replace("'warehouse.duckdb'", f"'{here}/warehouse.duckdb'")
-                .replace("zip://database.jpg", f"zip://{here}/database.jpg")
+                statement.replace(
+                    "'warehouse.duckdb'", f"'{here}/warehouse.duckdb'"
+                ).replace("zip://database.jpg", f"zip://{here}/database.jpg")
             )
     except duckdb.IOException as error:  # zipfs must be downloadable
         pytest.skip(f"zipfs unavailable: {error}")

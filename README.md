@@ -8,6 +8,56 @@ The implementation follows the pure-Python `uv` project shape from
 package code lives under `src/`, tests live under `tests/`, the CLI is exposed as
 `picture-thousand-records`, and notebook work lives under `notebooks/`.
 
+## What is inside `database.jpg`
+
+The file `database.jpg` is two files joined end to end. The first part is a
+JPEG picture of about 390 KB. The second part is a ZIP archive of about 7 MB.
+The archive holds three files:
+
+- `warehouse.duckdb`: the database. DuckDB (a program that keeps tables in one
+  file) reads it.
+- `manifest.json`: a list of the tables, their row counts, and the source of
+  the data.
+- `README.md`: the instructions for the database.
+
+```text
+database.jpg
+  first bytes   JPEG picture       starts with FF D8, ends with FF D9
+  next bytes    ZIP archive        stored without compression
+                  warehouse.duckdb   the database (about 7 MB)
+                  manifest.json      about 3 KB
+                  README.md          about 4 KB
+                  table of contents  the last bytes of the file
+```
+
+### How can one file be both?
+
+A JPEG ends with a two-byte marker, `FF D9`. The marker means that the picture
+ends here. A picture viewer stops at this marker and ignores every byte after
+it.
+
+A ZIP archive keeps its table of contents at the end of the file. A ZIP tool
+reads the end first. The table of contents tells the tool where each file
+starts, so the tool never needs the bytes at the front.
+
+As a result, each tool sees only its own part. The picture viewer sees a
+picture. The ZIP tool sees an archive. The ZIP data does not change the
+picture. The archive stores the database without compression, so the database
+inside it is a byte-for-byte copy of `warehouse.duckdb`.
+
+CAUTION: Keep the original file. Some apps re-save a picture when you send or
+upload it. A re-saved picture keeps only the photo and loses the database.
+
+## Related idea
+
+We drew inspiration from
+[F3: The Open-Source Data File Format for the Future](https://doi.org/10.1145/3749163).
+F3 stores data, metadata, and WebAssembly decoders in one file. We also drew
+on [JUMP-lite](https://arxiv.org/abs/2608.07632), which focuses on compact,
+reproducible image-based profiling data. This project uses a simpler shape for
+image-based science. The code lives on the browser page. The file opens first
+as an image, so anyone can see what the data is about before they run a query.
+
 ## Real data, not synthetic
 
 Every table in the warehouse is real, measured from CellProfiler's public

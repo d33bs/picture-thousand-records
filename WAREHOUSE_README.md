@@ -28,6 +28,22 @@ DETACH warehouse;
 .shell rm warehouse.duckdb
 ```
 
+## What is inside this file
+
+`database.jpg` is two files joined end to end. The first part is a JPEG
+picture of about 390 KB. The second part is a ZIP archive of about 7 MB. The
+archive holds three files:
+
+- `warehouse.duckdb`: the database. DuckDB (a program that keeps tables in
+  one file) reads it.
+- `manifest.json`: a list of the tables, their row counts, and the source.
+- `README.md`: this file.
+
+A JPEG ends with the two-byte marker `FF D9`, which means that the picture
+ends here. A picture viewer stops at that marker. A ZIP archive keeps its
+table of contents at the end of the file, so a ZIP tool reads the end first.
+Each tool sees only its own part.
+
 Every table is real, measured from CellProfiler's public `ExampleHuman`
 tutorial field (CC-0, no personal identifiers) with `cp_measure`, following
 the same pipeline shape as `ExampleHuman.cppipe`. See `tools/real_example_data`.

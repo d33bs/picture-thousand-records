@@ -312,27 +312,23 @@
   <main>
     <h1>A picture is worth a thousand records</h1>
     <p>
-      <code>database.jpg</code> is a real photo. You can open it like any
-      picture. It is also a real database. After the picture data ends, the
-      file holds real microscope images of human cells, real measurements,
-      and embeddings from a pretrained model, each one a list of numbers
-      that describes what a cell looks like.
+      <code>database.jpg</code> opens as a normal picture. It also carries a
+      DuckDB database. The picture comes first. After it, the same file stores
+      real microscope crops, cell measurements, and model embeddings. An
+      embedding is a list of numbers that describes one cell.
     </p>
     <p>
-      We use DuckDB, a database engine that can run inside your browser, so
-      you can ask the data real questions with SQL, the language you use to
-      query a database. Then you can watch how we are able to use MorphEm,
-      a pretrained model, to group similar-looking cells together, just by
-      hovering or clicking cells in the plots below.
+      This is a human-centered file for image-based science. First, you see
+      the instructions, schema, and cells. Then an embedded DuckDB database
+      lets you query the same file in your browser. The plots show how
+      MorphEm, a pretrained model, groups cells that look alike.
     </p>
     <img class="cover" src="database.jpg" alt="Database JPEG cover image">
     <div class="panel">
-      <h2>Run your own SQL</h2>
+      <h2>Run your own SQL on the database</h2>
       <p>
-        Start with a question. This box runs real SQL against the
-        database, using DuckDB-Wasm (a version of DuckDB compiled to run
-        entirely in your browser). Pick one of the example queries from
-        this project's README, or write your own and run it.
+        Start with a question. This input box runs real SQL against the database.
+        Pick an example query, or feel free to write your own.
       </p>
       <div class="examples" id="sql-examples"></div>
       <textarea id="sql-editor" spellcheck="false"></textarea>
@@ -341,10 +337,8 @@
       <div id="sql-results" aria-live="polite"></div>
     </div>
     <p>
-      Each row you just queried is one real cell. The two plots below place
-      every cell on a map, grouped by clustering: cells with similar
-      embeddings end up near each other. Each plot uses a different method
-      to build that map, so you can compare them.
+      Each point below is one real cell. Similar cells sit near each other.
+      The two maps use different methods, so you can compare them.
     </p>
     <div class="cluster-grid">
       <figure class="panel">
@@ -377,9 +371,8 @@
       <figure class="panel">
         <h2>HNSW k-NN graph layout</h2>
         <p class="plot-intro">
-          This second map takes a different approach. HNSW is an index: a
-          structure that quickly finds a cell's nearest neighbors. This
-          plot draws the cells it connected.
+          HNSW is an index: a structure that quickly finds nearest neighbors.
+          This plot draws the cells it connected.
         </p>
         <canvas id="graph-canvas" class="cluster-canvas" width="480"
                 height="480" role="img" aria-label="HNSW k-nearest-neighbor
@@ -408,9 +401,8 @@
       </figure>
     </div>
     <p>
-      Try it yourself. Search for a cell by its number, or let the page
-      pick one at random. Either way, the plots above will highlight it
-      and its nearest neighbors.
+      Search for a cell by number, or let the page pick one. The maps will
+      highlight that cell and its nearest neighbors.
     </p>
     <div class="search-row">
       <input id="object-number" type="number" min="1" placeholder="Cell #"
@@ -437,74 +429,112 @@
       <span id="tooltip-label"></span>
     </div>
     <div class="panel">
+      <h2>What is inside database.jpg</h2>
+      <p>
+        The file <code>database.jpg</code> is two files joined end to end.
+        The first part is a JPEG picture. The second part is a ZIP archive.
+        The archive holds three files.
+      </p>
+      <ul>
+        <li><code>warehouse.duckdb</code>: the database. DuckDB (a program
+          that keeps tables in one file) reads it.</li>
+        <li><code>manifest.json</code>: a list of the tables, their row
+          counts, and the source of the data.</li>
+        <li><code>README.md</code>: the instructions for the database.</li>
+      </ul>
+      <h3>How can one file be both?</h3>
+      <p>
+        A JPEG ends with a two-byte marker, <code>FF D9</code>. The marker
+        means that the picture ends here. A picture viewer stops at this
+        marker and ignores every byte after it.
+      </p>
+      <p>
+        A ZIP archive keeps its table of contents at the end of the file.
+        A ZIP tool reads the end first. The table of contents tells the tool
+        where each file starts, so the tool never needs the bytes at the
+        front.
+      </p>
+      <p>
+        As a result, each tool sees only its own part. The picture viewer
+        sees a picture. The ZIP tool sees an archive. The ZIP data does not
+        change the picture. The archive stores the database without
+        compression, so the database inside it is a byte-for-byte copy of
+        <code>warehouse.duckdb</code>.
+      </p>
+      <p>
+        CAUTION: Keep the original file. Some apps re-save a picture when
+        you send or upload it. A re-saved picture keeps only the photo and
+        loses the database.
+      </p>
+    </div>
+    <div class="panel">
+      <h2>Why this shape?</h2>
+      <p>
+        We drew inspiration from
+        <a href="https://doi.org/10.1145/3749163" target="_blank"
+           rel="noopener">F3</a>, a data-file design that stores data,
+        metadata, and WebAssembly decoders together. We also drew on
+        <a href="https://arxiv.org/abs/2608.07632" target="_blank"
+           rel="noopener">JUMP-lite</a>, which focuses on compact,
+        reproducible image-based profiling data. This project takes a simpler
+        path for image-based science. The code lives on this page. The file
+        opens first as an image, so anyone can see what the data is about
+        before they run a query.
+      </p>
+    </div>
+    <div class="panel">
       <h2>How this all works</h2>
       <p>
-        Every piece above runs on the same real data, end to end. Each
-        segmented cell has an embedding, stored in the
-        <code>morphem.features.embedding</code> column as a fixed-size
-        array: 1152 numbers, always in the same order, from the pretrained
+        Everything above uses the same real data. Each segmented cell has an
+        embedding in <code>morphem.features.embedding</code>. The embedding
+        has 1152 numbers from the pretrained
         <a href="https://huggingface.co/CaicedoLab/MorphEm" target="_blank"
-           rel="noopener">CaicedoLab/MorphEm</a> model. That fixed length is
-        what lets DuckDB compare any two embeddings directly, using its
-        built-in <code>array_distance</code> function, with no extra setup.
-        This page loads <code>database.jpg</code> into DuckDB-Wasm once,
-        then uses that same function to find the nearest neighbors of the
-        cell you search for or click. The whole page runs in your browser.
-        It does not need a server or Python.
+           rel="noopener">CaicedoLab/MorphEm</a> model. DuckDB compares two
+        embeddings with <code>array_distance</code>. This page uses that same
+        function when you search or click a cell.
       </p>
       <p>
-        The two plots use that same embedding, drawn two different ways.
-        Each point in the UMAP projection is one real cell.
+        The two plots draw the same embeddings in two ways.
         <a href="https://umap-learn.readthedocs.io/" target="_blank"
            rel="noopener">UMAP</a> (McInnes, Healy &amp; Melville, 2018)
-        projects each cell's embedding down to two dimensions, using the
-        reference <code>umap-learn</code> implementation. It measures
-        distance the same way <code>array_distance</code> does above.
+        makes a flat map of the cells. It measures distance the same way that
+        <code>array_distance</code> does.
       </p>
       <p>
-        Each point in the HNSW graph layout is the same cell, placed by a
-        different method. First, an
+        The HNSW graph uses a different method. An
         <a href="https://github.com/nmslib/hnswlib" target="_blank"
            rel="noopener">HNSW</a> index (Malkov &amp; Yashunin, 2016) finds
-        each cell's 6 nearest neighbors. This builds a graph: a network of
-        cells connected to their neighbors. A force-directed layout (from
-        the <a href="https://networkx.org/" target="_blank"
-           rel="noopener">networkx</a> library) then arranges the graph so
-        that connected cells sit close together. The lines you see are real
-        neighbor connections, not a copy of the UMAP layout.
+        each cell's 6 nearest neighbors. Then
+        <a href="https://networkx.org/" target="_blank"
+           rel="noopener">networkx</a> draws the graph. The lines are real
+        neighbor links, not a copy of the UMAP map.
       </p>
     </div>
     <div class="panel finding">
       <h2>Does this match the source paper?</h2>
       <p>
-        That clustering connects to something outside this page: the real
-        study this data came from. Jason Moffat, a co-author of the study
-        that first used this data
+        The clusters connect to the study that produced this data. Jason
+        Moffat, a co-author of that study
         (<a href="https://doi.org/10.1016/j.cell.2006.01.040" target="_blank"
             rel="noopener">Moffat et al. 2006, Cell</a>), provided these
-        images. That study screened many genes and used PH3 staining to
-        measure "mitotic index": the fraction of cells caught in the act of
-        dividing.
+        images. The study used PH3 staining to measure mitotic index: the
+        fraction of cells caught while they divide.
       </p>
       <p>
         This warehouse finds
         <strong>20 real PH3-positive (mitotic) cells</strong>
-        out of <strong>274</strong> in this one field. No one
-        told the model which cells were mitotic. Still, those cells cluster
-        tightly together in both plots above. On average,
+        out of <strong>274</strong> in this one field. No one told the model
+        which cells were mitotic. Still, those cells cluster together. On average,
         <strong>86%</strong> of a PH3-positive cell's nearest
         neighbors, found by the HNSW index, are also PH3-positive. Random
         scattering of mitotic cells predicts only
         <strong>7%</strong>.
       </p>
       <p>
-        MorphEm never trained on this screen. It still recovers the same
-        mitotic-versus-resting distinction the original study measured,
-        using only image shape and texture. That study's actual gene-by-gene
-        results compared many treated wells against controls, and this
-        single, untreated field cannot recover those results. But the
-        clustering above is a real, checkable link to where this data came
-        from.
+        MorphEm never trained on this screen. It still finds the same
+        mitotic-versus-resting difference, using only image shape and texture.
+        This one field cannot recover the study's gene-by-gene results. But
+        the cluster pattern gives a real, checkable link to the source data.
       </p>
     </div>
     <div class="panel">
@@ -514,6 +544,15 @@
         came from.
       </p>
       <ul class="citations">
+        <li>
+          Zeng, X., Meng, R., Prammer, M., McKinney, W., Patel, J.M.,
+          Pavlo, A., et al. (2025).
+          <a href="https://doi.org/10.1145/3749163" target="_blank"
+             rel="noopener">F3: The Open-Source Data File Format for the
+          Future</a>. Proceedings of the ACM on Management of Data, 3(4),
+          1 to 27. Inspiration for a file that carries both data and the
+          means to read it.
+        </li>
         <li>
           Moffat, J., Grueneberg, D.A., Yang, X., et al. (2006).
           <a href="https://doi.org/10.1016/j.cell.2006.01.040"
@@ -681,6 +720,14 @@
     };
 
     const cellValue = (value) => (typeof value === "bigint" ? value.toString() : value);
+
+    const normalizeObjectNumber = (value) => {
+      const objectNumber = Number(value);
+      if (!Number.isInteger(objectNumber) || objectNumber < 1) {
+        return null;
+      }
+      return String(objectNumber);
+    };
 
     // generic scalar formatter for the free-form SQL console below, where a
     // result column can be any real type, including BLOBs and the
@@ -912,6 +959,11 @@
     };
 
     const runSearch = async (objectNumber) => {
+      objectNumber = normalizeObjectNumber(objectNumber);
+      if (!objectNumber) {
+        setStatus("Enter a whole cell number.");
+        return;
+      }
       searchButton.disabled = true;
       randomButton.disabled = true;
       try {
@@ -1001,23 +1053,35 @@
 
     const renderSqlTable = (table) => {
       const { fields, rows } = sqlTableRows(table);
+      sqlResultsEl.replaceChildren();
       if (fields.length === 0) {
-        sqlResultsEl.innerHTML = "<p>Query returned no columns.</p>";
+        const message = document.createElement("p");
+        message.textContent = "Query returned no columns.";
+        sqlResultsEl.append(message);
         return;
       }
-      const header = fields.map((field) => `<th>${field}</th>`).join("");
-      const body = rows
-        .map((row) => {
-          const cells = fields.map((field) => `<td>${row[field]}</td>`).join("");
-          return `<tr>${cells}</tr>`;
-        })
-        .join("");
-      sqlResultsEl.innerHTML = `
-        <table>
-          <thead><tr>${header}</tr></thead>
-          <tbody>${body}</tbody>
-        </table>
-      `;
+      const tableEl = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      for (const field of fields) {
+        const th = document.createElement("th");
+        th.textContent = field;
+        headerRow.append(th);
+      }
+      thead.append(headerRow);
+
+      const tbody = document.createElement("tbody");
+      for (const row of rows) {
+        const tr = document.createElement("tr");
+        for (const field of fields) {
+          const td = document.createElement("td");
+          td.textContent = row[field];
+          tr.append(td);
+        }
+        tbody.append(tr);
+      }
+      tableEl.append(thead, tbody);
+      sqlResultsEl.append(tableEl);
     };
 
     // the actual example queries from this project's README: real SQL
