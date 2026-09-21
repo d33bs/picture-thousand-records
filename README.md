@@ -153,21 +153,35 @@ unzip -l database.jpg
 ```
 
 The validator checks that the artifact is a JPEG, that ZIP members are present,
-and that DuckDB can query the embedded database. It tries DuckDB `zipfs` first:
+and that DuckDB can query the embedded database. DuckDB cannot `ATTACH` a
+`zip://` path directly (checked on DuckDB 1.5.3 and 1.5.5), so it follows the
+same recipe printed on the JPEG. Run `duckdb` in the folder that holds
+`database.jpg`:
 
 ```sql
 INSTALL zipfs FROM community;
 LOAD zipfs;
 SET zipfs_split = '!!';
 
-ATTACH 'zip://database.jpg!!warehouse.duckdb'
-    AS warehouse
-    (READ_ONLY);
+COPY (SELECT content FROM read_blob('zip://database.jpg!!warehouse.duckdb'))
+    TO 'warehouse.duckdb' (FORMAT blob);
+
+ATTACH 'warehouse.duckdb' AS warehouse (READ_ONLY);
 ```
 
-If the local DuckDB build cannot attach a database through `zipfs`, the helper
-extracts `warehouse.duckdb` from the JPEG and attaches the extracted database
-read-only.
+The `COPY` streams the stored member out through `zipfs`, byte for byte, so no
+`unzip` is needed. If `zipfs` cannot be installed (for example, offline), the
+helper extracts `warehouse.duckdb` with Python's `zipfile` instead.
+
+To work fully in memory, copy the tables you need and delete the file:
+
+```sql
+CREATE SCHEMA cellprofiler; CREATE SCHEMA images; CREATE SCHEMA morphem;
+CREATE TABLE cellprofiler.cells AS SELECT * FROM warehouse.cellprofiler.cells;
+CREATE TABLE morphem.features   AS SELECT * FROM warehouse.morphem.features;
+DETACH warehouse;
+.shell rm warehouse.duckdb
+```
 
 ## Notebook
 
@@ -196,7 +210,8 @@ Serve the repository root and open `index.html`:
 python3 -m http.server 8000
 ```
 
-`index.html` fetches `database.jpg`, extracts `warehouse.duckdb` from the
+`index.html` fetches `database.jpg` (or, if the page was opened from disk,
+asks you to choose the file; nothing is uploaded), extracts `warehouse.duckdb` from the
 appended ZIP payload with JSZip, and registers the database bytes with
 DuckDB-Wasm — no server, no Python, entirely in the browser. It's a single
 page: the JPEG cover, then an editable SQL console, then the interactive

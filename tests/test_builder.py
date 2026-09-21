@@ -280,6 +280,7 @@ def test_browser_page_contains_wasm_adapter(tmp_path: Path) -> None:
     html = paths.browser_page.read_text(encoding="utf-8")
     assert "@duckdb/duckdb-wasm" in html
     assert "JSZip.loadAsync" in html
+    assert 'id="picker-input"' in html
     assert 'zip.file("warehouse.duckdb")' in html
     assert 'registerFileBuffer("warehouse.duckdb"' in html
     assert "ATTACH 'warehouse.duckdb' AS warehouse (READ_ONLY)" in html
@@ -316,3 +317,39 @@ def test_browser_page_contains_wasm_adapter(tmp_path: Path) -> None:
     assert "Moffat et al. 2006" in html
     assert "__MITOTIC_CELLS__" not in html
     assert "__PURITY_PCT__" not in html
+
+
+def test_documented_sql_recipe_runs_as_printed(tmp_path: Path) -> None:
+    """The SQL in the embedded README is what users copy; run it verbatim."""
+    import re
+    import shutil
+
+    import duckdb
+    import pytest
+
+    paths = build_artifacts(tmp_path)
+    readme = paths.readme.read_text(encoding="utf-8")
+    blocks = re.findall(r"```sql\n(.*?)```", readme, flags=re.S)
+    recipe = next(block for block in blocks if "read_blob" in block)
+    run_dir = tmp_path / "user_folder"
+    run_dir.mkdir()
+    shutil.copy(paths.jpeg, run_dir / "database.jpg")
+
+    con = duckdb.connect()
+    statements = [
+        statement.strip()
+        for statement in re.sub(r"--.*", "", recipe).split(";")
+        if statement.strip()
+    ]
+    # the recipe uses paths relative to the folder holding database.jpg
+    here = run_dir.as_posix()
+    try:
+        for statement in statements:
+            con.execute(
+                statement.replace("'warehouse.duckdb'", f"'{here}/warehouse.duckdb'")
+                .replace("zip://database.jpg", f"zip://{here}/database.jpg")
+            )
+    except duckdb.IOException as error:  # zipfs must be downloadable
+        pytest.skip(f"zipfs unavailable: {error}")
+    count = con.sql("SELECT count(*) FROM warehouse.cellprofiler.cells").fetchone()
+    assert count == (274,)

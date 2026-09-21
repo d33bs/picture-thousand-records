@@ -2,16 +2,30 @@
 
 This JPEG contains an embedded ZIP archive with a DuckDB database.
 
-DuckDB preferred access:
+DuckDB access (run `duckdb` in the folder that holds `database.jpg`):
 
 ```sql
 INSTALL zipfs FROM community;
 LOAD zipfs;
 SET zipfs_split = '!!';
 
-ATTACH 'zip://database.jpg!!warehouse.duckdb'
-    AS warehouse
-    (READ_ONLY);
+-- ATTACH cannot open a zip:// path directly (DuckDB 1.5.x), so stream the
+-- stored member out with read_blob, then attach the copy.
+COPY (SELECT content FROM read_blob('zip://database.jpg!!warehouse.duckdb'))
+    TO 'warehouse.duckdb' (FORMAT blob);
+
+ATTACH 'warehouse.duckdb' AS warehouse (READ_ONLY);
+```
+
+To keep everything in memory afterwards, copy the tables and drop the file:
+
+```sql
+CREATE SCHEMA cellprofiler; CREATE SCHEMA images; CREATE SCHEMA morphem;
+CREATE TABLE cellprofiler.cells AS SELECT * FROM warehouse.cellprofiler.cells;
+CREATE TABLE morphem.features   AS SELECT * FROM warehouse.morphem.features;
+-- ...repeat for any other table you need, then:
+DETACH warehouse;
+.shell rm warehouse.duckdb
 ```
 
 Every table is real, measured from CellProfiler's public `ExampleHuman`

@@ -350,16 +350,30 @@ def _embedded_readme(counts: dict[str, int]) -> str:
 
 This JPEG contains an embedded ZIP archive with a DuckDB database.
 
-DuckDB preferred access:
+DuckDB access (run `duckdb` in the folder that holds `database.jpg`):
 
 ```sql
 INSTALL zipfs FROM community;
 LOAD zipfs;
 SET zipfs_split = '!!';
 
-ATTACH 'zip://database.jpg!!warehouse.duckdb'
-    AS warehouse
-    (READ_ONLY);
+-- ATTACH cannot open a zip:// path directly (DuckDB 1.5.x), so stream the
+-- stored member out with read_blob, then attach the copy.
+COPY (SELECT content FROM read_blob('zip://database.jpg!!warehouse.duckdb'))
+    TO 'warehouse.duckdb' (FORMAT blob);
+
+ATTACH 'warehouse.duckdb' AS warehouse (READ_ONLY);
+```
+
+To keep everything in memory afterwards, copy the tables and drop the file:
+
+```sql
+CREATE SCHEMA cellprofiler; CREATE SCHEMA images; CREATE SCHEMA morphem;
+CREATE TABLE cellprofiler.cells AS SELECT * FROM warehouse.cellprofiler.cells;
+CREATE TABLE morphem.features   AS SELECT * FROM warehouse.morphem.features;
+-- ...repeat for any other table you need, then:
+DETACH warehouse;
+.shell rm warehouse.duckdb
 ```
 
 Every table is real, measured from CellProfiler's public `ExampleHuman`
@@ -573,10 +587,14 @@ def _draw_guide_panel(
         "Open as a picture: double-click database.jpg\n"
         "\n"
         "Open as a database:\n"
+        "  -- run `duckdb` in this file's folder\n"
         "  INSTALL zipfs FROM community; LOAD zipfs;\n"
         "  SET zipfs_split = '!!';\n"
-        "  ATTACH 'zip://database.jpg!!warehouse.duckdb'\n"
-        "      AS database (READ_ONLY);\n"
+        "  COPY (SELECT content FROM read_blob(\n"
+        "    'zip://database.jpg!!warehouse.duckdb'))\n"
+        "    TO 'warehouse.duckdb' (FORMAT blob);\n"
+        "  ATTACH 'warehouse.duckdb' AS database\n"
+        "    (READ_ONLY);\n"
         "  SELECT * FROM database.cellprofiler.cells\n"
         "  LIMIT 10;"
     )
@@ -658,6 +676,7 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>A picture is worth a thousand records</title>
+  <link rel="icon" href="data:,">
   <style>
     :root {
       color-scheme: dark;
@@ -1072,6 +1091,12 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
       <button id="random" class="secondary" type="button" disabled>Random cell</button>
     </div>
     <pre id="status">Loading database.jpg into DuckDB-Wasm...</pre>
+    <p id="picker" hidden>
+      Could not fetch <code>database.jpg</code> automatically (this happens
+      when the page is opened from disk). Choose the file yourself. It stays
+      in your browser and is never uploaded:
+      <input id="picker-input" type="file" accept=".jpg,.jpeg,image/jpeg">
+    </p>
     <div class="layout">
       <figure id="seed-figure" hidden>
         <img id="seed-image" alt="Search seed cell">
@@ -1296,14 +1321,16 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
     let graphEdges = [];
     let pointsByObjectNumber = new Map();
 
-    const openWarehouse = async () => {
+    const fetchJpegBytes = async () => {
       setStatus("Fetching database.jpg...");
       const response = await fetch("database.jpg", { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`database.jpg returned ${response.status}`);
       }
-      const jpegBytes = await response.arrayBuffer();
+      return response.arrayBuffer();
+    };
 
+    const openWarehouse = async (jpegBytes) => {
       setStatus("Extracting warehouse.duckdb from JPEG ZIP payload...");
       const zip = await JSZip.loadAsync(jpegBytes);
       const databaseMember = zip.file("warehouse.duckdb");
@@ -1751,9 +1778,13 @@ SELECT 'images.object_crops', COUNT(*) FROM warehouse.images.object_crops;`,
       }
     });
 
-    const init = async () => {
+    const pickerEl = document.querySelector("#picker");
+    const pickerInput = document.querySelector("#picker-input");
+
+    const init = async (loadBytes = fetchJpegBytes) => {
+      pickerEl.hidden = true;
       try {
-        connection = await openWarehouse();
+        connection = await openWarehouse(await loadBytes());
         searchButton.disabled = false;
         randomButton.disabled = false;
         sqlButton.disabled = false;
@@ -1766,8 +1797,18 @@ SELECT 'images.object_crops', COUNT(*) FROM warehouse.images.object_crops;`,
         await runSearch(startingObjectNumber);
       } catch (error) {
         setStatus(`Failed to load database.jpg: ${error.message}`);
+        // a page opened from disk (file://) cannot fetch() its neighbours;
+        // let the person hand the same JPEG to the page directly instead.
+        pickerEl.hidden = false;
       }
     };
+
+    pickerInput.addEventListener("change", () => {
+      const file = pickerInput.files[0];
+      if (file) {
+        init(() => file.arrayBuffer());
+      }
+    });
 
     searchButton.addEventListener("click", () => {
       const value = objectNumberInput.value.trim();

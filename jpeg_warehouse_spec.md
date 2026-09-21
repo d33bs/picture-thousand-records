@@ -74,6 +74,11 @@ LIMIT 10;
 
 The prototype should explicitly test this path with the current `zipfs` extension.
 
+> **Tested result (DuckDB 1.5.3 / 1.5.5):** direct `ATTACH 'zip://…!!…'` fails
+> ("database does not exist"). `read_blob('zip://…!!warehouse.duckdb')` works, so
+> the shipped recipe is `COPY (SELECT content FROM read_blob(…)) TO
+> 'warehouse.duckdb' (FORMAT blob)` followed by a normal `ATTACH`.
+
 If direct `ATTACH` through `zipfs` is not supported by a given DuckDB build, the fallback is:
 
 1. Read `warehouse.duckdb` through the ZIP filesystem.
