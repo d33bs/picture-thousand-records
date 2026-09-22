@@ -742,7 +742,9 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>A picture is worth a thousand records</title>
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="data:image/svg+xml,<svg
+        xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22
+        ><text y=%22.9em%22 font-size=%2290%22>%F0%9F%A6%86</text></svg>">
   <style>
     :root {
       color-scheme: dark;
