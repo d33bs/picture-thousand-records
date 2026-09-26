@@ -177,9 +177,16 @@ src/picture_thousand_records/_version.py
 # PyPI configuration file
 .pypirc
 
-# regenerable output of tools/real_example_data/extract_features.py
-# (the canonical copies live in src/picture_thousand_records/assets/)
-tools/real_example_data/output/
+# regenerable output of data-preparation scripts
+tools/bbbc039_data/downloads/
+tools/bbbc039_data/raw/
+tools/bbbc039_data/output/
+src/picture_thousand_records/assets/*.parquet
+
+# build output: the same database is stored inside database.jpg
+# (regenerate it with `uv run picture-thousand-records build`)
+database.duckdb
+database.duckdb.wal
 
 # Cursor
 #  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to

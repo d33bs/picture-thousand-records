@@ -1,4 +1,4 @@
-"""DuckDB helpers for opening a JPEG Warehouse."""
+"""DuckDB helpers for opening a JPEG Database."""
 
 from __future__ import annotations
 
@@ -11,21 +11,22 @@ import duckdb
 
 
 @dataclass(frozen=True)
-class WarehouseConnection:
+class DatabaseConnection:
     """A DuckDB connection plus the access mode that succeeded."""
 
     connection: duckdb.DuckDBPyConnection
     mode: str
     extracted_database: Path | None = None
+    hnsw: bool = False
 
 
-def connect_to_warehouse(
+def connect_to_database(
     jpeg_path: str | Path,
     *,
-    alias: str = "warehouse",
+    alias: str = "database",
     temp_dir: str | Path | None = None,
-) -> WarehouseConnection:
-    """Attach the embedded DuckDB database from a JPEG Warehouse artifact.
+) -> DatabaseConnection:
+    """Attach the embedded DuckDB database from a JPEG Database artifact.
 
     DuckDB cannot `ATTACH` a `zip://` path directly (checked on 1.5.x), so the
     preferred path is the SQL-only recipe in the JPEG's README: stream the
@@ -43,22 +44,36 @@ def connect_to_warehouse(
     except duckdb.Error:
         _extract_database(path, destination)
         mode = "extracted"
+    hnsw = _try_load_vss(con)
     con.execute(f"ATTACH '{destination.as_posix()}' AS {alias} (READ_ONLY)")
-    return WarehouseConnection(
+    return DatabaseConnection(
         connection=con,
         mode=mode,
         extracted_database=destination,
+        hnsw=hnsw,
     )
+
+
+def _try_load_vss(con: duckdb.DuckDBPyConnection) -> bool:
+    """Load `vss` so HNSW indexes work. Without it, the data still opens."""
+
+    try:
+        con.execute("INSTALL vss")
+        con.execute("LOAD vss")
+        con.execute("SET hnsw_enable_experimental_persistence = true")
+    except duckdb.Error:
+        return False
+    return True
 
 
 def _destination(temp_dir: str | Path | None) -> Path:
     destination_dir = (
         Path(temp_dir)
         if temp_dir is not None
-        else Path(tempfile.mkdtemp(prefix="jpeg-warehouse-"))
+        else Path(tempfile.mkdtemp(prefix="jpeg-database-"))
     )
     destination_dir.mkdir(parents=True, exist_ok=True)
-    return destination_dir / "warehouse.duckdb"
+    return destination_dir / "database.duckdb"
 
 
 def _copy_member_with_zipfs(
@@ -72,13 +87,13 @@ def _copy_member_with_zipfs(
     con.execute(
         "COPY (SELECT content FROM read_blob(?)) "
         f"TO '{destination.as_posix()}' (FORMAT blob)",
-        [f"zip://{path.as_posix()}!!warehouse.duckdb"],
+        [f"zip://{path.as_posix()}!!database.duckdb"],
     )
 
 
 def _extract_database(path: Path, destination: Path) -> None:
     with (
         zipfile.ZipFile(path) as archive,
-        archive.open("warehouse.duckdb") as source,
+        archive.open("database.duckdb") as source,
     ):
         destination.write_bytes(source.read())

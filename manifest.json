@@ -1,92 +1,182 @@
 {
-  "format": "jpeg-warehouse",
+  "format": "jpeg-database",
   "version": "0.2",
-  "title": "Real CellProfiler ExampleHuman Warehouse",
-  "database": "warehouse.duckdb",
+  "title": "BBBC039 JPEG Database",
+  "database": "database.duckdb",
   "database_engine": "duckdb",
   "access": {
     "filesystem": "zipfs",
-    "member": "warehouse.duckdb",
+    "member": "database.duckdb",
     "split": "!!"
   },
   "schemas": [
-    "cellprofiler",
+    "bbbc039",
     "images",
-    "morphem"
+    "features"
   ],
   "rows": {
-    "cellprofiler.nuclei": 274,
-    "cellprofiler.cells": 303,
-    "cellprofiler.cytoplasm": 303,
-    "cellprofiler.ph3": 28,
-    "images.images": 1,
-    "images.object_crops": 909,
-    "morphem.features": 303,
-    "morphem.knn_graph": 1818
+    "bbbc039.images": 200,
+    "bbbc039.objects": 19565,
+    "bbbc039.annotations": 19565,
+    "bbbc039.segmentations": 200,
+    "images.images": 200,
+    "images.object_crops": 19565,
+    "features.cp_measure": 19565,
+    "features.morphem": 19565,
+    "features.fused": 19565,
+    "features.knn_graph": 352170,
+    "features.embedding_quality": 9
   },
   "source": {
-    "dataset": "CellProfiler ExampleHuman tutorial dataset (CC-0)",
-    "source_url": "https://github.com/cytomining/CytoTable/tree/main/tests/data/cellprofiler/ExampleHuman",
-    "cell_segmentation": "Cellpose default model on the cell-body channel",
-    "cell_segmentation_reference": "Stringer et al. 2021; Pachitariu & Stringer 2022; Pachitariu et al. 2025",
-    "nuclei_and_ph3_segmentation": "CellProfiler-style thresholding and intensity watershed",
-    "measured_with": "cp_measure",
-    "pipeline": "tools/real_example_data/ExampleHuman.cppipe",
+    "dataset": "Broad Bioimage Benchmark Collection BBBC039",
+    "source_url": "https://bbbc.broadinstitute.org/BBBC039",
+    "cell_type": "human U2OS cells",
+    "channel": "DNA / Hoechst",
+    "image_count": 200,
+    "annotated_nuclei": 19565,
+    "manual_annotations": "BBBC039 PNG masks decoded to nucleus objects",
+    "feature_spaces": [
+      "cp_measure",
+      "morphem",
+      "fused"
+    ],
+    "measured_with": "cp_measure (CellProfiler measurements) on the manual masks; MorphEm embeddings on the DNA crops; scikit-image to decode the masks. The database does not store the original images or masks; download them from BBBC039 to re-measure",
+    "pipeline": "tools/bbbc039_data",
+    "stored_images": "one 8-bit JPEG crop per nucleus (images.object_crops)",
+    "not_stored": [
+      "original TIFF images",
+      "manual mask PNGs",
+      "16-bit raw crops and crop masks",
+      "JPEG XL crops",
+      "Cellpose masks"
+    ],
     "crop_columns": [
-      "pixel_data_raw",
-      "pixel_data_jpegxl",
       "pixel_data_jpeg"
     ]
   },
-  "morphem": {
-    "model": "CaicedoLab/MorphEm",
-    "model_url": "https://huggingface.co/CaicedoLab/MorphEm",
-    "embedding_dim": 1152,
-    "embedding_dim_per_channel": 384,
-    "channels": [
-      "DNA",
-      "PH3",
-      "cellbody"
+  "cellpose": {
+    "library": "cellpose",
+    "library_version": "4.2.1.1",
+    "library_url": "https://github.com/MouseLand/cellpose",
+    "model": "cpsam_v2",
+    "diameter": "auto-estimated per image",
+    "min_size": 40,
+    "iou_threshold": 0.5,
+    "matching": "one-to-one greedy by IoU (best pair first): a manual nucleus is captured when a Cellpose mask overlaps it with IoU >= 0.5, and each Cellpose mask captures at most one manual nucleus",
+    "columns": [
+      "cellpose_captured",
+      "cellpose_iou"
     ],
-    "projection": {
-      "method": "UMAP",
-      "library": "umap-learn",
-      "reference": "McInnes, Healy & Melville (2018)",
-      "metric": "euclidean",
-      "random_state": 42,
-      "columns": [
-        "umap_x",
-        "umap_y"
+    "captured_nuclei": 17687,
+    "missed_nuclei": 1878,
+    "captured_pct": 90.4,
+    "note": "cellpose_iou holds the matched pair's IoU for captured nuclei and the best IoU reached with any Cellpose mask otherwise. Cellpose masks are not stored; re-run tools/bbbc039_data/match_cellpose.py to reproduce them"
+  },
+  "features": {
+    "default_feature_space": "fused",
+    "cp_measure": {
+      "library": "cp_measure",
+      "library_version": "0.2.0",
+      "library_url": "https://github.com/afermg/cp_measure",
+      "reference": "Munoz et al. (2025), arXiv:2507.01163",
+      "call": "cp_measure.bulk.get_core_measurements(legacy=True)",
+      "input": "BBBC039 manual nucleus masks and the DNA channel, scaled to 0-1 by each image's maximum",
+      "raw_table": "bbbc039.objects",
+      "measurements_per_nucleus": 271,
+      "embedding_dim": 16,
+      "vector_column": "measurement_vector",
+      "description": "PCA reduction (16 dimensions) of the 263 AreaShape, Granularity, Intensity, RadialDistribution, and Texture columns that cp_measure computed; the full measurements are in bbbc039.objects"
+    },
+    "morphem": {
+      "model": "CaicedoLab/MorphEm",
+      "model_url": "https://huggingface.co/CaicedoLab/MorphEm",
+      "embedding_dim": 384,
+      "vector_column": "embedding",
+      "channels": [
+        "DNA"
+      ]
+    },
+    "fused": {
+      "embedding_dim": 48,
+      "vector_column": "fused_embedding",
+      "description": "cp_measure PCA features concatenated with MorphEm PCA features"
+    },
+    "maps": {
+      "n_components": 3,
+      "note": "Each feature table has three 3-D maps of the same vectors. The page draws all three side by side and marks the HNSW search result on each.",
+      "pca": {
+        "method": "PCA",
+        "library": "scikit-learn",
+        "reference": "Jolliffe & Cadima (2016)",
+        "random_state": 42,
+        "columns": [
+          "pca_x",
+          "pca_y",
+          "pca_z"
+        ]
+      },
+      "umap": {
+        "method": "UMAP",
+        "library": "umap-learn",
+        "reference": "McInnes, Healy & Melville (2018)",
+        "metric": "euclidean",
+        "random_state": 42,
+        "columns": [
+          "umap_x",
+          "umap_y",
+          "umap_z"
+        ]
+      },
+      "tsne": {
+        "method": "t-SNE (Barnes-Hut, 3-D)",
+        "library": "openTSNE",
+        "reference": "Policar, Strazar & Zupan (2024); van der Maaten & Hinton (2008)",
+        "perplexity": 30,
+        "metric": "euclidean",
+        "random_state": 42,
+        "columns": [
+          "tsne_x",
+          "tsne_y",
+          "tsne_z"
+        ]
+      },
+      "quality_table": "features.embedding_quality",
+      "quality_measure": "neighbor_recall: share of a nucleus's 6 exact nearest neighbors (in the feature space) that are also among its 15 nearest points on the map. distance_ratio: median map distance to a true neighbor over the median distance between random pairs (lower is better)."
+    },
+    "hnsw_index": {
+      "method": "HNSW index (used by the page's nearest-neighbor search)",
+      "note": "Stored for cp_measure and fused. MorphEm has no stored index (it would add about 33 MB), so MorphEm searches scan all vectors with the same SQL.",
+      "extension": "vss",
+      "extension_url": "https://duckdb.org/docs/current/core_extensions/vss",
+      "reference": "Malkov & Yashunin (2016)",
+      "metric": "l2sq (paired with array_distance)",
+      "options": "metric = 'l2sq', M = 16, ef_construction = 200, ef_search = 100",
+      "indexes": {
+        "cp_measure": "features.cp_measure(measurement_vector)",
+        "fused": "features.fused(fused_embedding)"
+      },
+      "not_indexed": [
+        "morphem"
+      ],
+      "recall_at_12_vs_exact_scan": {
+        "cp_measure": 1.0,
+        "fused": 0.9932
+      },
+      "recall_sample": "every 100th nucleus",
+      "load": [
+        "INSTALL vss",
+        "LOAD vss",
+        "SET hnsw_enable_experimental_persistence = true"
       ]
     },
     "knn_graph": {
-      "method": "HNSW k-NN graph",
-      "library": "hnswlib",
-      "reference": "Malkov & Yashunin (2016)",
+      "description": "k=6 neighbors of every nucleus in all three feature spaces, found with HNSW indexes (temporary for MorphEm); the page averages the 6 distances into a neighbor-density color",
       "k": 6,
-      "metric": "euclidean",
-      "edge_table": "morphem.knn_graph",
-      "layout": {
-        "method": "Fruchterman-Reingold force-directed layout",
-        "library": "networkx",
-        "random_state": 42,
-        "columns": [
-          "graph_x",
-          "graph_y"
-        ]
-      }
-    },
-    "mitotic_cluster_alignment": {
-      "phenotype": "PH3-positive (mitotic) cells",
-      "source_paper": "Moffat et al. 2006 (Cell)",
-      "note": "the ExampleHuman field's source screen used PH3 staining to score mitotic index; these unsupervised embeddings recover the same distinction",
-      "mitotic_cells": 21,
-      "total_cells": 303,
-      "mean_knn_neighbor_purity_pct": 91,
-      "population_baseline_pct": 7
+      "edge_table": "features.knn_graph"
     }
   },
   "views": {
-    "cellprofiler.single_cell": "merged Cytoplasm/Cells/Nuclei single-cell profile, joined with the CytoTable-style parent-key pattern (anchored on Cytoplasm, LEFT JOIN Cells/Nuclei via Parent_Cells/Parent_Nuclei)"
+    "bbbc039.annotations": "manual nucleus objects decoded from BBBC039 masks",
+    "bbbc039.segmentations": "one row per manually annotated image mask"
   }
 }

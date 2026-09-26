@@ -4,7 +4,7 @@ requires = [ "setuptools>=64", "setuptools-scm>=8" ]
 
 [project]
 name = "picture-thousand-records"
-description = "JPEG plus DuckDB warehouse prototype for real CellProfiler microscopy data."
+description = "JPEG plus DuckDB database prototype for BBBC039 bioimage data."
 readme = "README.md"
 authors = [
   { name = "CU DBMI" },
@@ -38,8 +38,7 @@ dev = [
 # its own custom `trust_remote_code=True` model class, and that code isn't
 # compatible with the 5.x loading pipeline internals.
 morphem = [
-  "hnswlib>=0.8.0",
-  "networkx>=3.2",
+  "opentsne>=1.0",
   "pandas>=2.2",
   "pyarrow>=14.0",
   "safetensors>=0.8.0",
@@ -56,12 +55,17 @@ notebooks = [
   "nbclient>=0.10",
   "nbformat>=5.10",
   "pandas>=2.2",
-  "pillow-jxl-plugin>=1.3.8",
+]
+# cellpose lives in its own group: match_cellpose.py runs under
+# `uv run --group real_data --group cellpose`, so the base extraction stays
+# free of the torch stack.
+cellpose = [
+  "cellpose>=4.2.1",
 ]
 real_data = [
-  "cellpose>=4.0",
-  "cp-measure>=0.2",
-  "pillow-jxl-plugin>=1.3.8",
+  "cp-measure>=0.2.0",
+  "numpy>=2.0",
+  "pandas>=2.2",
   "pyarrow>=14.0",
   "scikit-image>=0.25",
 ]
@@ -103,7 +107,7 @@ lint.select = [
 ]
 lint.per-file-ignores."__init__.py" = [ "F401" ]
 lint.per-file-ignores."tests/*" = [ "PLR2004" ]
-lint.per-file-ignores."tools/*" = [ "PLR2004" ]
+lint.per-file-ignores."tools/*" = [ "PLR0913", "PLR0917", "PLR2004" ]
 
 [tool.pytest.ini_options]
 pythonpath = [ "." ]
