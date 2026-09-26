@@ -421,6 +421,43 @@
       display: block;
       background: #0c1218;
     }
+    .plot-canvas-wrap {
+      position: relative;
+      background: #0c1218;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    .loading-spinner {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      border: 2px solid #415363;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .loading-spinner {
+        animation: none;
+      }
+    }
+    .plot-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(12, 18, 24, 0.86);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .plot-loading[hidden] {
+      display: none;
+    }
     .plot-toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -501,6 +538,17 @@
       border: 1px solid var(--line);
       display: block;
     }
+    .tooltip-spinner {
+      width: 32px;
+      height: 32px;
+      margin: 20px;
+    }
+    .tooltip:not(.is-loading) .tooltip-spinner {
+      display: none;
+    }
+    .tooltip.is-loading img {
+      display: none;
+    }
     @media (max-width: 700px) {
       .cluster-grid {
         grid-template-columns: 1fr;
@@ -559,6 +607,24 @@
       background: #0c1218;
       border: 1px solid var(--line);
       color: var(--muted);
+    }
+    .status-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 16px;
+      padding: 12px;
+      min-height: 45px;
+      overflow: auto;
+      background: #0c1218;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+    .status-box:not(.is-loading) .status-spinner {
+      display: none;
     }
     .layout {
       display: grid;
@@ -775,7 +841,11 @@
       <div class="examples" id="sql-examples"></div>
       <textarea id="sql-editor" spellcheck="false"></textarea>
       <button id="run-sql" type="button" disabled>Run query</button>
-      <pre id="sql-status">Waiting for database.jpg to load...</pre>
+      <div id="sql-status" class="status-box is-loading" role="status"
+           aria-live="polite">
+        <span class="loading-spinner status-spinner" aria-hidden="true"></span>
+        <span id="sql-status-text">Waiting for database.jpg to load...</span>
+      </div>
       <div id="sql-results" aria-live="polite"></div>
     </div>
     <h2>Compare the nuclei in feature space</h2>
@@ -863,10 +933,16 @@
                    value="0" aria-label="PCA zoom">
           </label>
         </div>
-        <canvas class="cluster-canvas" width="1000" height="1000"
-                role="img" aria-label="Rotatable 3D PCA point cloud of
-                BBBC039 feature vectors colored by neighbor density. Drag to
-                rotate, scroll to zoom, click a point to search."></canvas>
+        <div class="plot-canvas-wrap">
+          <canvas class="cluster-canvas" width="1000" height="1000"
+                  role="img" aria-label="Rotatable 3D PCA point cloud of
+                  BBBC039 feature vectors colored by neighbor density. Drag to
+                  rotate, scroll to zoom, click a point to search."></canvas>
+          <div class="plot-loading" aria-live="polite">
+            <span class="loading-spinner" aria-hidden="true"></span>
+            <span class="plot-loading-text">Loading PCA map...</span>
+          </div>
+        </div>
         <p class="plot-readout" aria-live="polite">
           <span class="readout-search"></span>
           <span class="readout-all"></span>
@@ -889,10 +965,16 @@
                    value="0" aria-label="UMAP zoom">
           </label>
         </div>
-        <canvas class="cluster-canvas" width="1000" height="1000"
-                role="img" aria-label="Rotatable 3D UMAP point cloud of
-                BBBC039 feature vectors colored by neighbor density. Drag to
-                rotate, scroll to zoom, click a point to search."></canvas>
+        <div class="plot-canvas-wrap">
+          <canvas class="cluster-canvas" width="1000" height="1000"
+                  role="img" aria-label="Rotatable 3D UMAP point cloud of
+                  BBBC039 feature vectors colored by neighbor density. Drag to
+                  rotate, scroll to zoom, click a point to search."></canvas>
+          <div class="plot-loading" aria-live="polite">
+            <span class="loading-spinner" aria-hidden="true"></span>
+            <span class="plot-loading-text">Loading UMAP map...</span>
+          </div>
+        </div>
         <p class="plot-readout" aria-live="polite">
           <span class="readout-search"></span>
           <span class="readout-all"></span>
@@ -915,10 +997,16 @@
                    value="0" aria-label="t-SNE zoom">
           </label>
         </div>
-        <canvas class="cluster-canvas" width="1000" height="1000"
-                role="img" aria-label="Rotatable 3D t-SNE point cloud of
-                BBBC039 feature vectors colored by neighbor density. Drag to
-                rotate, scroll to zoom, click a point to search."></canvas>
+        <div class="plot-canvas-wrap">
+          <canvas class="cluster-canvas" width="1000" height="1000"
+                  role="img" aria-label="Rotatable 3D t-SNE point cloud of
+                  BBBC039 feature vectors colored by neighbor density. Drag to
+                  rotate, scroll to zoom, click a point to search."></canvas>
+          <div class="plot-loading" aria-live="polite">
+            <span class="loading-spinner" aria-hidden="true"></span>
+            <span class="plot-loading-text">Loading t-SNE map...</span>
+          </div>
+        </div>
         <p class="plot-readout" aria-live="polite">
           <span class="readout-search"></span>
           <span class="readout-all"></span>
@@ -965,7 +1053,11 @@
         Random nucleus
       </button>
     </div>
-    <pre id="status">Loading database.jpg into DuckDB-Wasm...</pre>
+    <div id="status" class="status-box is-loading" role="status"
+         aria-live="polite">
+      <span class="loading-spinner status-spinner" aria-hidden="true"></span>
+      <span id="status-text">Loading database.jpg into DuckDB-Wasm...</span>
+    </div>
     <p id="picker" hidden>
       Could not fetch <code>database.jpg</code> automatically (this happens
       when the page is opened from disk). Choose the file yourself. It stays
@@ -980,6 +1072,7 @@
       <div id="results" class="grid" aria-live="polite"></div>
     </div>
     <div id="hover-tooltip" class="tooltip" hidden>
+      <span class="loading-spinner tooltip-spinner" aria-hidden="true"></span>
       <img id="tooltip-image" alt="">
       <span id="tooltip-label"></span>
     </div>
@@ -1689,6 +1782,7 @@
     import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.2/+esm";
 
     const statusEl = document.querySelector("#status");
+    const statusTextEl = document.querySelector("#status-text");
     const featureTabs = document.querySelector("#feature-tabs");
     const searchButton = document.querySelector("#search");
     const randomButton = document.querySelector("#random");
@@ -1711,8 +1805,9 @@
       { passive: true, capture: true },
     );
 
-    const setStatus = (message) => {
-      statusEl.textContent = message;
+    const setStatus = (message, loading = true) => {
+      statusTextEl.textContent = message;
+      statusEl.classList.toggle("is-loading", loading);
     };
 
     const jpegToDataUrl = (bytes) => {
@@ -1868,6 +1963,9 @@
 
     const loadClusterData = async () => {
       const feature = FEATURE_SPACES[activeFeatureSpace];
+      for (const plot of plots) {
+        plot.setLoading(`Loading ${feature.label} ${plot.method.toUpperCase()} map...`);
+      }
       // Keep the startup query small. Crop images are fetched on demand for
       // hover cards and nearest-neighbor results.
       const pointTable = await connection.query(`
@@ -2009,16 +2107,22 @@
     const showTooltip = (objectNumber, event) => {
       const requestId = hoverRequestId + 1;
       hoverRequestId = requestId;
-      tooltipImage.removeAttribute("src");
-      tooltipLabel.textContent = missedById.get(String(objectNumber))
+      const label = missedById.get(String(objectNumber))
         ? `nucleus ${objectNumber} — missed by Cellpose`
         : `nucleus ${objectNumber}`;
+      tooltipImage.removeAttribute("src");
+      tooltipImage.hidden = true;
+      tooltip.classList.add("is-loading");
+      tooltipLabel.textContent = `${label} — loading crop...`;
       tooltip.style.left = `${event.clientX + 14}px`;
       tooltip.style.top = `${event.clientY + 14}px`;
       tooltip.hidden = false;
       fetchCropImageDataUrl(objectNumber).then((dataUrl) => {
         if (requestId === hoverRequestId) {
           tooltipImage.src = dataUrl;
+          tooltipImage.hidden = false;
+          tooltip.classList.remove("is-loading");
+          tooltipLabel.textContent = label;
         }
       }).catch(() => {
         if (requestId === hoverRequestId) {
@@ -2029,6 +2133,7 @@
 
     const hideTooltip = () => {
       hoverRequestId += 1;
+      tooltip.classList.remove("is-loading");
       tooltip.hidden = true;
     };
 
@@ -2040,6 +2145,8 @@
       const canvas = panel.querySelector("canvas");
       const ctx = canvas.getContext("2d");
       const zoomSlider = panel.querySelector(".plot-zoom");
+      const loadingEl = panel.querySelector(".plot-loading");
+      const loadingTextEl = panel.querySelector(".plot-loading-text");
       const readoutSearch = panel.querySelector(".readout-search");
       const readoutAll = panel.querySelector(".readout-all");
       const view = { ...DEFAULT_VIEW };
@@ -2066,6 +2173,15 @@
       let cssWidth = canvas.getBoundingClientRect().width || 400;
       // Sizes below are CSS pixels; the canvas has more pixels than that.
       const px = () => canvas.width / cssWidth;
+      const setLoading = (message) => {
+        loadingTextEl.textContent = message;
+        loadingEl.hidden = false;
+        canvas.setAttribute("aria-busy", "true");
+      };
+      const clearLoading = () => {
+        loadingEl.hidden = true;
+        canvas.removeAttribute("aria-busy");
+      };
 
       new ResizeObserver((entries) => {
         cssWidth = entries[0].contentRect.width || cssWidth;
@@ -2154,6 +2270,7 @@
         syncZoomSlider();
         describeQuality();
         setSelection(selection);
+        clearLoading();
       };
 
       // Shift the default view up or down so the middle 99% of the points
@@ -2704,7 +2821,7 @@
         }
       };
 
-      return { method, setData, setSelection, resetView, draw, tick };
+      return { method, setData, setSelection, setLoading, resetView, draw, tick };
     };
 
     for (const panel of document.querySelectorAll(".map-panel")) {
@@ -2819,7 +2936,7 @@
     const runSearch = async (objectNumber) => {
       objectNumber = normalizeObjectNumber(objectNumber);
       if (!objectNumber) {
-        setStatus("Enter a whole nucleus number.");
+        setStatus("Enter a whole nucleus number.", false);
         return;
       }
       searchButton.disabled = true;
@@ -2836,7 +2953,7 @@
         `);
         const seedRows = rowsOf(seedTable);
         if (seedRows.length === 0) {
-          setStatus(`No nucleus found with number ${objectNumber}.`);
+          setStatus(`No nucleus found with number ${objectNumber}.`, false);
           resultsEl.replaceChildren();
           seedFigure.hidden = true;
           return;
@@ -2891,9 +3008,10 @@
           + (hnswAvailable && feature.indexed
             ? "(DuckDB HNSW index)."
             : "(exact scan)."),
+          false,
         );
       } catch (error) {
-        setStatus(`Search failed: ${error.message}`);
+        setStatus(`Search failed: ${error.message}`, false);
       } finally {
         searchButton.disabled = false;
         randomButton.disabled = false;
@@ -2914,7 +3032,13 @@
     const sqlExamplesEl = document.querySelector("#sql-examples");
     const sqlButton = document.querySelector("#run-sql");
     const sqlStatusEl = document.querySelector("#sql-status");
+    const sqlStatusTextEl = document.querySelector("#sql-status-text");
     const sqlResultsEl = document.querySelector("#sql-results");
+
+    const setSqlStatus = (message, loading = false) => {
+      sqlStatusTextEl.textContent = message;
+      sqlStatusEl.classList.toggle("is-loading", loading);
+    };
 
     const sqlTableRows = (table) => {
       const fields = table.schema.fields.map((field) => field.name);
@@ -3054,12 +3178,12 @@ SELECT 'images.object_crops', COUNT(*) FROM database.images.object_crops;`,
       sqlButton.disabled = true;
       sqlResultsEl.replaceChildren();
       try {
-        sqlStatusEl.textContent = "Running query...";
+        setSqlStatus("Running query...", true);
         const table = await connection.query(sql);
         renderSqlTable(table);
-        sqlStatusEl.textContent = `Query complete: ${table.numRows} row(s).`;
+        setSqlStatus(`Query complete: ${table.numRows} row(s).`, false);
       } catch (error) {
-        sqlStatusEl.textContent = `Query failed: ${error.message}`;
+        setSqlStatus(`Query failed: ${error.message}`, false);
       } finally {
         sqlButton.disabled = false;
       }
@@ -3082,14 +3206,14 @@ SELECT 'images.object_crops', COUNT(*) FROM database.images.object_crops;`,
         searchButton.disabled = false;
         randomButton.disabled = false;
         sqlButton.disabled = false;
-        sqlStatusEl.textContent = "Ready.";
+        setSqlStatus("Ready.", false);
         setStatus("Loading cluster maps...");
         await loadClusterData();
         redrawClusters(null, []);
-        setStatus("Ready.");
+        setStatus("Ready.", false);
         await runSearch(DEFAULT_OBJECT_NUMBER);
       } catch (error) {
-        setStatus(`Failed to load database.jpg: ${error.message}`);
+        setStatus(`Failed to load database.jpg: ${error.message}`, false);
         // a page opened from disk (file://) cannot fetch() its neighbours;
         // let the person hand the same JPEG to the page directly instead.
         pickerEl.hidden = false;
