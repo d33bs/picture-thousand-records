@@ -48,12 +48,13 @@ morphem = [
   "umap-learn>=0.5.7",
 ]
 notebooks = [
-  "cytodataframe @ git+https://github.com/cytomining/CytoDataFrame.git",
+  "cytodataframe>=0.3.6,<0.4",
   "ipykernel>=6.29",
   "ipython>=8.26",
   "jupyterlab>=4.4",
   "nbclient>=0.10",
   "nbformat>=5.10",
+  "numpy>=2.0",
   "pandas>=2.2",
 ]
 # cellpose lives in its own group: match_cellpose.py runs under
@@ -68,6 +69,14 @@ real_data = [
   "pandas>=2.2",
   "pyarrow>=14.0",
   "scikit-image>=0.25",
+]
+
+[tool.uv]
+conflicts = [
+  [
+    { group = "notebooks" },
+    { group = "real_data" },
+  ],
 ]
 
 [tool.setuptools]

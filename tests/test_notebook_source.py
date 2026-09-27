@@ -17,7 +17,14 @@ def test_notebook_queries_embedded_images() -> None:
     assert "pixel_data_jpeg" in source
     assert "CytoDataFrame" in source
     assert "Metadata_ImageID" in source
-    assert "data_context_dir" in source
+    assert "Image_DNA" in source
+    assert "jpeg_bytes_to_ome_arrow" in source
+    assert '"type": "ome.arrow"' in source
+    assert "data_context_dir" not in source
+    assert "Image_FileName_DNA" not in source
+    assert "jpeg_to_data_url" not in source
+    assert "to_html" not in source
+    assert "base64" not in source
     assert "tempfile.mkdtemp" in source
     assert "pillow_jxl" not in source
     assert "pixel_data_raw" not in source
@@ -30,5 +37,4 @@ def test_notebook_queries_embedded_images() -> None:
     assert "ExampleHuman" not in source
     assert "cellprofiler.cells" not in source
     assert "media.jpeg_images" not in source
-    assert "ome_arrow" not in source
     assert "images.tiles" not in source
