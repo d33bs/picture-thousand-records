@@ -254,6 +254,11 @@ def test_browser_page_contains_bbbc039_interactive_page(
         "@duckdb/duckdb-wasm",
         "JSZip.loadAsync",
         'id="picker-input"',
+        "%F0%9F%A6%A0",
+        'property="og:image" content="database.jpg"',
+        'property="og:image:type" content="image/jpeg"',
+        'property="og:image:width" content="1440"',
+        'property="og:image:height" content="1440"',
         "BBBC039",
         "Dataset at a glance",
         'class="dataset-stats"',
@@ -352,6 +357,7 @@ def test_browser_page_contains_bbbc039_interactive_page(
     assert "HNSW k-NN edge" not in html
     assert "hnswlib" not in html
     assert "Moffat et al. 2006" not in html
+    assert 'name="twitter:' not in html
 
 
 def test_browser_page_contains_inline_svg_diagrams(

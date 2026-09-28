@@ -1148,9 +1148,18 @@ def _write_browser_page(path: Path, counts: dict[str, int]) -> None:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>A picture is worth a thousand records</title>
+  <meta name="description" content="A JPEG that opens as a picture, a DuckDB database, and an interactive BBBC039 single-cell browser.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="A picture is worth a thousand records">
+  <meta property="og:description" content="A JPEG that opens as a picture, a DuckDB database, and an interactive BBBC039 single-cell browser.">
+  <meta property="og:image" content="database.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1440">
+  <meta property="og:image:height" content="1440">
+  <meta property="og:image:alt" content="database.jpg project preview image">
   <link rel="icon" href="data:image/svg+xml,<svg
         xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22
-        ><text y=%22.9em%22 font-size=%2290%22>%F0%9F%A6%86</text></svg>">
+        ><text y=%22.9em%22 font-size=%2290%22>%F0%9F%A6%A0</text></svg>">
   <style>
     :root {
       color-scheme: dark;
